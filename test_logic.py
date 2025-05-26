@@ -1,4 +1,4 @@
-#!/bin/python3
+#!/usr/bin/env python3
 import subjective_logic as sl
 
 a1 = sl.Opinion(0.8, 0.1, 0.1, 0.8)
