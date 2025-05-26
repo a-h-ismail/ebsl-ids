@@ -1,11 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-
-typedef struct opinion
-{
-    float b, d, u, a;
-} opinion;
+#include "subjective_logic.h"
 
 void print_opinion(opinion o)
 {
@@ -131,8 +127,7 @@ int main()
         return 1;
 
     puts("Average fusion:");
-    for (int i = 0; i < 1e7; ++i)
-        ref = average_fusion(all_opinions, array_length(all_opinions));
+    ref = average_fusion(all_opinions, array_length(all_opinions));
 
     print_opinion(ref);
     putchar('\n');
