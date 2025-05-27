@@ -41,7 +41,9 @@ class Opinion:
         discounted._a = self._a
 
         if inplace:
-            self = copy.copy(discounted)
+            self._b = discounted._b
+            self._d = discounted._d
+            self._u = discounted._u
 
         return discounted
 
@@ -132,13 +134,14 @@ class BSL_SM:
         self.model = model
         self.trust_opinion = trust_opinion
         self.trust_offset = 0
+        # The opinion is for class 1
         self.opinion = Opinion()
         self.conflict = 0
 
     def get_opinion(self, data):
         "Generates the belief opinion of this model based on the prediction probability discounted with initial trust"
         probabilities = self.model.predict_proba(data)
-        self.opinion.set_parameters(probabilities[0], probabilities[1], 0)
+        self.opinion.set_parameters(probabilities[1], probabilities[0], 0)
         self.opinion.trust_discounting(self.trust_opinion, True)
         return self.opinion
 
