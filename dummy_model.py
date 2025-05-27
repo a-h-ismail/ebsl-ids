@@ -20,11 +20,16 @@ class DModel:
 
     def predict(self, x):
         # x is ignored intentionally
-        return round(self.probability_seq[self.index])
+        prob = self.probability_seq[self.index]
+        self.index += 1
+        return round(prob)
 
     def predict_proba(self, x):
         # Provide the raw probability of both classes, intended to imitate sklearn
-        return (1-self.probability_seq[self.index], self.probability_seq[self.index])
+        probs = (1-self.probability_seq[self.index],
+                 self.probability_seq[self.index])
+        self.index += 1
+        return probs
 
     def reset(self):
         self.index = 0
