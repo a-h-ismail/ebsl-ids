@@ -136,12 +136,10 @@ class BSL_SM:
         self.conflict = 0
 
     def get_opinion(self, data):
-        "Generates the belief opinion of this model based on the prediction probability and model trust"
+        "Generates the belief opinion of this model based on the prediction probability discounted with initial trust"
         probabilities = self.model.predict_proba(data)
-        p = probabilities[1]
-        scale_factor = 1+self.trust_opinion._u
-        self.opinion.set_parameters(
-            p/scale_factor, (1-p)/scale_factor, self.trust_opinion._u/scale_factor)
+        self.opinion.set_parameters(probabilities[0], probabilities[1], 0)
+        self.opinion.trust_discounting(self.trust_opinion, True)
         return self.opinion
 
     def get_discounted_opinion(self):
