@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import copy
+import numpy as np
 
 
 class Opinion:
@@ -8,7 +9,7 @@ class Opinion:
         self.set_parameters(belief, disbelief, uncertainty, base_rate)
 
     def set_parameters(self, belief: float, disbelief: float, uncertainty: float, base_rate: float = -1):
-        "Sets opinion parameters and checks their validity"
+        """Sets opinion parameters and checks their validity. If base rate is not specified, it is unchanged"""
         # b,d,u should never be touched directly to avoid having invalid opinions
         self._b = belief
         self._d = disbelief
@@ -56,15 +57,15 @@ class Opinion:
         elif offset < 0:
             offset = max(offset, self._b)
 
-        offset_opinion = copy.copy(self)
-        offset_opinion._b += offset
-        offset_opinion._d -= offset
+        penalized_trust = copy.copy(self)
+        penalized_trust._b += offset
+        penalized_trust._d -= offset
 
         if inplace:
-            self._b = offset_opinion._b
-            self._d = offset_opinion._d
+            self._b = penalized_trust._b
+            self._d = penalized_trust._d
 
-        return offset_opinion
+        return penalized_trust
 
     def projected_probability(self) -> float:
         return self._b + self._a * self._u
@@ -121,6 +122,7 @@ def average_fusion(all_opinions: list | tuple) -> Opinion:
     numerator = u_product * nb_opinion
     fused._u = numerator / denominator
 
+    # Calculate dx
     fused._d = 1 - fused._b - fused._u
     fused.validate_opinion()
 
@@ -133,21 +135,32 @@ class BSL_SM:
     def __init__(self, model, trust_opinion: Opinion) -> None:
         self.model = model
         self.trust_opinion = trust_opinion
-        self.trust_offset = 0
+        self.trust_penalty = 0
         # The opinion is for class 1
         self.opinion = Opinion()
         self.conflict = 0
+        self.conflict_count = 0
 
-    def get_opinion(self, data):
-        "Generates the belief opinion of this model based on the prediction probability discounted with initial trust"
+    def get_opinion(self, data) -> Opinion:
+        """
+        Generates the belief opinion of this model based on the prediction probability discounted with initial trust
+
+        Returns:
+            opinion: A reference to the internal object storing the opinion
+        """
         probabilities = self.model.predict_proba(data)
         self.opinion.set_parameters(probabilities[1], probabilities[0], 0)
         self.opinion.trust_discounting(self.trust_opinion, True)
         return self.opinion
 
-    def get_discounted_opinion(self):
-        "Calculates the discounted opinion according to the trust opinion modified with trust offset"
-        modified_trust = self.trust_opinion.modify_trust(self.trust_offset)
+    def get_discounted_opinion(self) -> Opinion:
+        """Calculates the discounted opinion according to the trust opinion modified with trust offset
+
+        Warning: This function assumes you already called get_opinion()
+
+        Returns: A new opinion after trust discounting
+        """
+        modified_trust = self.trust_opinion.modify_trust(self.trust_penalty)
         return self.opinion.trust_discounting(modified_trust)
 
     def set_prior_probability(self, probability: float):
@@ -157,28 +170,47 @@ class BSL_SM:
 class EBSL:
     "EBSL: Ensemble Binomial Subjective Logic"
 
-    def __init__(self) -> None:
+    def __init__(self, conflict_threshold=0.05, max_penalty=0.5, bspeed=1) -> None:
         self.slmodels = []
         self.reference_opinion = Opinion()
+        self.conflict_threshold = conflict_threshold
+        self.max_penalty = max_penalty
+        self.bspeed = bspeed
 
     def add_model(self, model: BSL_SM):
         self.slmodels.append(model)
 
+    def get_penalty(self, nb_conflict):
+        return self.max_penalty*nb_conflict/(nb_conflict + self.bspeed)
+
     def get_all_opinions_and_ref(self, data):
+        "Gets all original model opinions and calculates the reference by averaging opinions after being discounted by original trust + offset"
         opinions = []
         for slmodel in self.slmodels:
-            opinions.append(slmodel.get_opinion(data))
+            opinion = slmodel.get_opinion(data)
+            modified_trust = slmodel.trust_opinion.modify_trust(
+                slmodel.trust_penalty)
+            opinions.append(opinion.trust_discounting(modified_trust))
+
         self.reference_opinion = average_fusion(opinions)
 
-    def calculate_conflict(self):
+    def get_all_conflicts(self) -> None:
         for slmodel in self.slmodels:
             slmodel.conflict = slmodel.opinion.calculate_conflict(
                 self.reference_opinion)
 
-    def update_models_trust(self):
-        pass  # for now
+    def reevaluate_trust(self) -> None:
+        """Updates the trust for each model according to the conflict"""
+        conflicts = [i.conflict for i in self.slmodels]
+        average_conflict = np.average(conflicts)
+        conflict_offset = np.subtract(average_conflict, conflicts)
+        for i in range(len(conflict_offset)):
+            if conflict_offset[i] > self.conflict_threshold:
+                self.slmodels[i].conflict_count += 1
+                self.slmodels[i].trust_penalty = self.get_penalty(
+                    self.slmodels[i].conflict_count)
 
-    def get_final_prediction(self):
+    def get_final_prediction(self) -> float:
         "Calculates the final prediction using discounted opinions"
         discounted_opinions = []
         for slmodel in self.slmodels:
@@ -192,11 +224,11 @@ class EBSL:
         for slmodel in self.slmodels:
             slmodel.opinion.set_base_rate(prob)
 
-        return round(prob)
+        return prob
 
-    def run_once(self, data) -> int:
+    def run_once(self, data) -> float:
         # First run inference for each model, estimate opinions and their average
         self.get_all_opinions_and_ref(data)
-        self.calculate_conflict()
-        self.update_models_trust()
+        self.get_all_conflicts()
+        self.reevaluate_trust()
         return self.get_final_prediction()
