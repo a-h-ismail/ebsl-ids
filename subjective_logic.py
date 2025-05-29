@@ -81,7 +81,7 @@ class Opinion:
         return prob_dist * conjunctive_conf
 
     def __str__(self) -> str:
-        return "belief = %g, disbelief = %g, uncertainty = %g, base rate = %g" % (self._b, self._d, self._u, self._a)
+        return "b = %g, d = %g, u = %g, a = %g" % (self._b, self._d, self._u, self._a)
 
     def set_base_rate(self, proba: float) -> None:
         if proba < 0 or proba > 1:
@@ -174,13 +174,14 @@ class BSL_SM:
 class EBSL:
     "EBSL: Ensemble Binomial Subjective Logic"
 
-    def __init__(self, conflict_threshold=0.05, max_penalty=0.5, b=1, trust_restore_speed=2) -> None:
+    def __init__(self, conflict_threshold=0.05, max_penalty=0.5, b=1, trust_restore_speed=2, _debug=False) -> None:
         self.slmodels = []
         self.reference_opinion = Opinion()
         self.conflict_threshold = conflict_threshold
         self.max_penalty = max_penalty
         self.b = b
         self.trust_restore_speed = trust_restore_speed
+        self._debug = _debug
 
     def add_model(self, model: BSL_SM):
         self.slmodels.append(model)
@@ -199,6 +200,22 @@ class EBSL:
             discounted_opinions.append(discounted_opinion)
 
         self.reference_opinion = average_fusion(discounted_opinions)
+
+        if self._debug:
+            print("Original information opinion")
+            for i in range(len(self.slmodels)):
+                print("Model %d: " % (i), end="")
+                print(self.slmodels[i].information_opinion)
+
+            print("\nDiscounted opinions")
+            for i in range(len(self.slmodels)):
+                print("Model %d: " % (i), end="")
+                print(discounted_opinions[i])
+            print("Reference opinion (no penalty):", end="")
+            print(average_fusion(
+                [i.information_opinion for i in self.slmodels]))
+            print("Reference opinion (penalized):",
+                  self.reference_opinion, "\n")
 
     def get_all_conflicts(self) -> None:
         """Calculate conflict relative to the reference opinion. Results are stored in each model object"""
@@ -220,6 +237,18 @@ class EBSL:
             elif self.slmodels[i].conflict_count != 0:
                 self.slmodels[i].conflict_count -= min(
                     self.trust_restore_speed, self.slmodels[i].conflict_count)
+                self.slmodels[i].trust_penalty = self.get_penalty(
+                    self.slmodels[i].conflict_count)
+
+        if self._debug:
+            print("Conflict:", all_conflict)
+            print("Average conflict:", average_conflict)
+            print("Distance to average:", distance_to_average_conf)
+            for i in range(len(self.slmodels)):
+                cc = self.slmodels[i].conflict_count
+                penalty = self.slmodels[i].trust_penalty
+                print("Model %d: Conflict count = %g, penalty = %g" %
+                      (i, cc, penalty))
 
     def get_final_prediction(self) -> float:
         "Calculates the final prediction using discounted information opinion. Updates the base rate for all model opinions"
