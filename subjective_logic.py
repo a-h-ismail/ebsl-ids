@@ -5,10 +5,10 @@ import numpy as np
 
 class Opinion:
 
-    def __init__(self, belief: float = 0, disbelief: float = 0, uncertainty: float = 1, base_rate: float = 0) -> None:
+    def __init__(self, belief=0., disbelief=0., uncertainty=1., base_rate=0.) -> None:
         self.set_parameters(belief, disbelief, uncertainty, base_rate)
 
-    def set_parameters(self, belief: float, disbelief: float, uncertainty: float, base_rate: float = -1):
+    def set_parameters(self, belief: float, disbelief: float, uncertainty: float, base_rate=-1.):
         """Sets opinion parameters and checks their validity. If base rate is not specified, it is unchanged"""
         # b,d,u should never be touched directly to avoid having invalid opinions
         self._b = belief
@@ -162,7 +162,7 @@ class BSL_SM:
 
         Warning: This function assumes you already called get_information_opinion()
 
-        Returns: A new opinion after trust discounting
+        Returns: A new opinion after trust discounting (original opinion unchanged)
         """
         modified_trust = self.trust_opinion.modify_trust(self.trust_penalty)
         return self.information_opinion.trust_discounting(modified_trust)
@@ -174,60 +174,64 @@ class BSL_SM:
 class EBSL:
     "EBSL: Ensemble Binomial Subjective Logic"
 
-    def __init__(self, conflict_threshold=0.05, max_penalty=0.5, bspeed=1) -> None:
+    def __init__(self, conflict_threshold=0.05, max_penalty=0.5, b=1, trust_restore_speed=2) -> None:
         self.slmodels = []
         self.reference_opinion = Opinion()
         self.conflict_threshold = conflict_threshold
         self.max_penalty = max_penalty
-        self.bspeed = bspeed
+        self.b = b
+        self.trust_restore_speed = trust_restore_speed
 
     def add_model(self, model: BSL_SM):
         self.slmodels.append(model)
 
     def get_penalty(self, nb_conflict):
-        return self.max_penalty*nb_conflict/(nb_conflict + self.bspeed)
+        return self.max_penalty*nb_conflict/(nb_conflict + self.b)
 
     def get_all_opinions_and_ref(self, data):
         "Gets all original model opinions (by inference) then calculates the reference opinion (penalized)"
         discounted_opinions = []
         for slmodel in self.slmodels:
             # Get the information opinion
-            opinion = slmodel.get_information_opinion(data)
-            # Calculate the trust opinion after penalty
-            modified_trust = slmodel.trust_opinion.modify_trust(
-                slmodel.trust_penalty)
+            slmodel.get_information_opinion(data)
             # Calculate the information opinion after discounting with penalized trust
-            discounted_opinions.append(
-                opinion.trust_discounting(modified_trust))
+            discounted_opinion = slmodel.get_discounted_information_opinion()
+            discounted_opinions.append(discounted_opinion)
 
         self.reference_opinion = average_fusion(discounted_opinions)
 
     def get_all_conflicts(self) -> None:
+        """Calculate conflict relative to the reference opinion. Results are stored in each model object"""
         for slmodel in self.slmodels:
             slmodel.conflict = slmodel.information_opinion.calculate_conflict(
                 self.reference_opinion)
 
     def reevaluate_trust(self) -> None:
         """Updates the trust for each model according to the conflict"""
-        conflicts = [i.conflict for i in self.slmodels]
-        average_conflict = np.average(conflicts)
-        conflict_offset = np.subtract(average_conflict, conflicts)
-        for i in range(len(conflict_offset)):
-            if conflict_offset[i] > self.conflict_threshold:
+        all_conflict = [i.conflict for i in self.slmodels]
+        average_conflict = np.average(all_conflict)
+        distance_to_average_conf = np.subtract(all_conflict, average_conflict)
+
+        for i in range(len(distance_to_average_conf)):
+            if distance_to_average_conf[i] > self.conflict_threshold:
                 self.slmodels[i].conflict_count += 1
                 self.slmodels[i].trust_penalty = self.get_penalty(
                     self.slmodels[i].conflict_count)
+            elif self.slmodels[i].conflict_count != 0:
+                self.slmodels[i].conflict_count -= min(
+                    self.trust_restore_speed, self.slmodels[i].conflict_count)
 
     def get_final_prediction(self) -> float:
-        "Calculates the final prediction using discounted information opinion"
+        "Calculates the final prediction using discounted information opinion. Updates the base rate for all model opinions"
         discounted_opinions = []
         for slmodel in self.slmodels:
             discounted_opinions.append(
                 slmodel.get_discounted_information_opinion())
 
         final_opinion = average_fusion(discounted_opinions)
-        # The base rate should be the same everywhere
+        # The base rate should be the same everywhere, so set it to the final opinion (or it will stay 0)
         final_opinion.set_base_rate(discounted_opinions[0]._a)
+
         prob = final_opinion.projected_probability()
 
         # Set the base rate for all models to be the newly calculated projected probability
@@ -237,8 +241,10 @@ class EBSL:
         return prob
 
     def run_once(self, data) -> float:
-        # First run inference for each model, estimate opinions and their average
+        # First run inference for each model, estimate opinions and their penalized average
         self.get_all_opinions_and_ref(data)
+        # Find conflict between undiscounted opinions and penalized average
         self.get_all_conflicts()
+        # Based on conflicts, find new trust values
         self.reevaluate_trust()
         return self.get_final_prediction()
