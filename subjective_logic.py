@@ -49,17 +49,20 @@ class Opinion:
         return discounted
 
     def modify_trust(self, offset: float, inplace=False):
-        "Returns the same opinion with b' = b + offset and d' = d - offset"
-        # The max positive offset is the disbelief (because d can't be negative)
+        "Returns the same opinion with b' = b - offset and d' = d + offset"
+        # The max positive offset is the belief (because b can't be negative)
+        # The min function caps the offset at self._b
+        # Reminder: b + d + u = 1
         if offset >= 0:
-            offset = min(offset, self._d)
-        # Same logic, we get max negative offset = belief
+            offset = min(offset, self._b)
+        # Same logic, we get max negative offset = disbelief
+        # We use max instead of min here because values are negative
         elif offset < 0:
-            offset = max(offset, self._b)
+            offset = max(offset, self._d)
 
         penalized_trust = copy.copy(self)
-        penalized_trust._b += offset
-        penalized_trust._d -= offset
+        penalized_trust._b -= offset
+        penalized_trust._d += offset
 
         if inplace:
             self._b = penalized_trust._b
@@ -137,11 +140,11 @@ class BSL_SM:
         self.trust_opinion = trust_opinion
         self.trust_penalty = 0
         # The opinion is for class 1
-        self.opinion = Opinion()
+        self.information_opinion = Opinion()
         self.conflict = 0
         self.conflict_count = 0
 
-    def get_opinion(self, data) -> Opinion:
+    def get_information_opinion(self, data) -> Opinion:
         """
         Generates the belief opinion of this model based on the prediction probability discounted with initial trust
 
@@ -149,19 +152,20 @@ class BSL_SM:
             opinion: A reference to the internal object storing the opinion
         """
         probabilities = self.model.predict_proba(data)
-        self.opinion.set_parameters(probabilities[1], probabilities[0], 0)
-        self.opinion.trust_discounting(self.trust_opinion, True)
-        return self.opinion
+        self.information_opinion.set_parameters(
+            probabilities[1], probabilities[0], 0)
+        self.information_opinion.trust_discounting(self.trust_opinion, True)
+        return self.information_opinion
 
-    def get_discounted_opinion(self) -> Opinion:
-        """Calculates the discounted opinion according to the trust opinion modified with trust offset
+    def get_discounted_information_opinion(self) -> Opinion:
+        """Calculates the discounted opinion according to the trust opinion modified with trust penalty
 
-        Warning: This function assumes you already called get_opinion()
+        Warning: This function assumes you already called get_information_opinion()
 
         Returns: A new opinion after trust discounting
         """
         modified_trust = self.trust_opinion.modify_trust(self.trust_penalty)
-        return self.opinion.trust_discounting(modified_trust)
+        return self.information_opinion.trust_discounting(modified_trust)
 
     def set_prior_probability(self, probability: float):
         self.trust_opinion.set_base_rate(probability)
@@ -184,19 +188,23 @@ class EBSL:
         return self.max_penalty*nb_conflict/(nb_conflict + self.bspeed)
 
     def get_all_opinions_and_ref(self, data):
-        "Gets all original model opinions and calculates the reference by averaging opinions after being discounted by original trust + offset"
-        opinions = []
+        "Gets all original model opinions (by inference) then calculates the reference opinion (penalized)"
+        discounted_opinions = []
         for slmodel in self.slmodels:
-            opinion = slmodel.get_opinion(data)
+            # Get the information opinion
+            opinion = slmodel.get_information_opinion(data)
+            # Calculate the trust opinion after penalty
             modified_trust = slmodel.trust_opinion.modify_trust(
                 slmodel.trust_penalty)
-            opinions.append(opinion.trust_discounting(modified_trust))
+            # Calculate the information opinion after discounting with penalized trust
+            discounted_opinions.append(
+                opinion.trust_discounting(modified_trust))
 
-        self.reference_opinion = average_fusion(opinions)
+        self.reference_opinion = average_fusion(discounted_opinions)
 
     def get_all_conflicts(self) -> None:
         for slmodel in self.slmodels:
-            slmodel.conflict = slmodel.opinion.calculate_conflict(
+            slmodel.conflict = slmodel.information_opinion.calculate_conflict(
                 self.reference_opinion)
 
     def reevaluate_trust(self) -> None:
@@ -211,18 +219,20 @@ class EBSL:
                     self.slmodels[i].conflict_count)
 
     def get_final_prediction(self) -> float:
-        "Calculates the final prediction using discounted opinions"
+        "Calculates the final prediction using discounted information opinion"
         discounted_opinions = []
         for slmodel in self.slmodels:
-            discounted_opinions.append(slmodel.get_discounted_opinion())
+            discounted_opinions.append(
+                slmodel.get_discounted_information_opinion())
 
         final_opinion = average_fusion(discounted_opinions)
         # The base rate should be the same everywhere
         final_opinion.set_base_rate(discounted_opinions[0]._a)
         prob = final_opinion.projected_probability()
-        # Set the base rate for all models to be this projected probability
+
+        # Set the base rate for all models to be the newly calculated projected probability
         for slmodel in self.slmodels:
-            slmodel.opinion.set_base_rate(prob)
+            slmodel.information_opinion.set_base_rate(prob)
 
         return prob
 
