@@ -133,7 +133,7 @@ def average_fusion(all_opinions: list | tuple) -> Opinion:
 
 
 class BSL_SM:
-    "BSLC: Ensemble Binomial Subjective Logic - Single Model"
+    "BSL_SM: Binomial Subjective Logic - Single Model"
 
     def __init__(self, model, trust_opinion: Opinion) -> None:
         self.model = model
@@ -144,18 +144,11 @@ class BSL_SM:
         self.conflict = 0
         self.conflict_count = 0
 
-    def get_information_opinion(self, data) -> Opinion:
-        """
-        Generates the belief opinion of this model based on the prediction probability discounted with initial trust
-
-        Returns:
-            opinion: A reference to the internal object storing the opinion
-        """
+    def get_information_opinion(self, data):
+        """Generates the belief opinion of this model based on the prediction probability"""
         probabilities = self.model.predict_proba(data)
         self.information_opinion.set_parameters(
             probabilities[1], probabilities[0], 0)
-        self.information_opinion.trust_discounting(self.trust_opinion, True)
-        return self.information_opinion
 
     def get_discounted_information_opinion(self) -> Opinion:
         """Calculates the discounted opinion according to the trust opinion modified with trust penalty
@@ -211,9 +204,6 @@ class EBSL:
             for i in range(len(self.slmodels)):
                 print("Model %d: " % (i), end="")
                 print(discounted_opinions[i])
-            print("Reference opinion (no penalty):", end="")
-            print(average_fusion(
-                [i.information_opinion for i in self.slmodels]))
             print("Reference opinion (penalized):",
                   self.reference_opinion, "\n")
 
