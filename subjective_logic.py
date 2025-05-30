@@ -224,6 +224,7 @@ class EBSL:
                 self.slmodels[i].conflict_count += 1
                 self.slmodels[i].trust_penalty = self.get_penalty(
                     self.slmodels[i].conflict_count)
+
             elif self.slmodels[i].conflict_count != 0:
                 self.slmodels[i].conflict_count -= min(
                     self.trust_restore_speed, self.slmodels[i].conflict_count)
@@ -250,6 +251,12 @@ class EBSL:
         final_opinion = average_fusion(discounted_opinions)
         # The base rate should be the same everywhere, so set it to the final opinion (or it will stay 0)
         final_opinion.set_base_rate(discounted_opinions[0]._a)
+
+        if self._debug:
+            print("\nFinal opinion:", final_opinion)
+            # Projected probability is made of 2 parts: belief and contribution of prior probability
+            print("Base rate contribution:",
+                  final_opinion._a * final_opinion._u)
 
         prob = final_opinion.projected_probability()
 
