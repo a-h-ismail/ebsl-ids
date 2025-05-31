@@ -138,10 +138,10 @@ class BSL_SM:
     def __init__(self, model, trust_opinion: Opinion) -> None:
         self.model = model
         self.trust_opinion = trust_opinion
-        self.trust_penalty = 0
+        self.trust_penalty = 0.
         # The opinion is for class 1
         self.information_opinion = Opinion()
-        self.conflict = 0
+        self.conflict = 0.
         self.conflict_count = 0
 
     def get_information_opinion(self, data):
@@ -168,7 +168,7 @@ class EBSL:
     "EBSL: Ensemble Binomial Subjective Logic"
 
     def __init__(self, conflict_threshold=0.05, max_penalty=0.5, b=1, trust_restore_speed=2, _debug=False) -> None:
-        self.slmodels = []
+        self.slmodels: list[BSL_SM] = []
         self.reference_opinion = Opinion()
         self.conflict_threshold = conflict_threshold
         self.max_penalty = max_penalty
@@ -184,7 +184,7 @@ class EBSL:
 
     def get_all_opinions_and_ref(self, data):
         "Gets all original model opinions (by inference) then calculates the reference opinion (penalized)"
-        discounted_opinions = []
+        discounted_opinions: list[Opinion] = []
         for slmodel in self.slmodels:
             # Get the information opinion
             slmodel.get_information_opinion(data)
@@ -243,7 +243,7 @@ class EBSL:
 
     def get_final_prediction(self) -> float:
         "Calculates the final prediction using discounted information opinion. Updates the base rate for all model opinions"
-        discounted_opinions = []
+        discounted_opinions: list[Opinion] = []
         for slmodel in self.slmodels:
             discounted_opinions.append(
                 slmodel.get_discounted_information_opinion())
