@@ -17,8 +17,6 @@ print(a1.trust_discounting(a3))
 for a in (a1, a2, a3, a4):
     print(a.calculate_conflict(fused))
 
-print("------------")
-
 m1 = dm.DModel((0.1, 0.1, 0.15, 0.6, 0.8, 0.6, 0.76, 0.81))
 m2 = dm.DModel((0.05, 0.1, 0.8, 0.5, 0.9, 0.1, 0.81, 0.69))
 m3 = dm.DModel((0.2, 0.1, 0.1, 0.2, 0.1, 0.4, 0.37, 0.2))
@@ -37,6 +35,4 @@ eclassifier.add_model(eb2)
 eclassifier.add_model(eb3)
 
 for i in range(8):
-    print("Iteration", i)
-    print("Prediction:", eclassifier.run_once([]))
-    print("--------------------------------------------")
+    print(eclassifier.run_once([]))

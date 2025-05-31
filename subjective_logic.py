@@ -189,6 +189,8 @@ class EBSL:
         self.b = b
         self.trust_restore_speed = trust_restore_speed
         self._debug = _debug
+        # Used in debug output iteration indicator
+        self._debug_iteration_index = 0
 
         if base_rate_choice == "prior":
             self.base_rate_choice = 0
@@ -256,7 +258,7 @@ class EBSL:
 
         if self._debug:
             print("Conflict:", all_conflict)
-            print("Average conflict:", average_conflict)
+            print("Average conflict: %g" % average_conflict)
             print("Distance to average:", distance_to_average_conf)
             for i in range(len(self.slmodels)):
                 cc = self.slmodels[i].conflict_count
@@ -290,6 +292,11 @@ class EBSL:
         return prob
 
     def run_once(self, row) -> float:
+        if self._debug:
+            print("--------------------------------------------")
+            print("Iteration", self._debug_iteration_index)
+            self._debug_iteration_index += 1
+
         # First run inference for each model, estimate opinions and their penalized average
         self.get_all_opinions_and_ref(row)
         # Find conflict between undiscounted opinions and penalized average
