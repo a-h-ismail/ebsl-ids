@@ -172,6 +172,7 @@ class BSL_SM:
         Returns: A new opinion after trust discounting (original opinion unchanged)
         """
         modified_trust = self.trust_opinion.modify_trust(self.trust_penalty)
+        self.penalized_trust_opinion = modified_trust
         return self.information_opinion.trust_discounting(modified_trust)
 
     def set_prior_probability(self, probability: float):
@@ -204,6 +205,10 @@ class EBSL:
     def add_model(self, model: BSL_SM):
         self.slmodels.append(model)
 
+    def set_all_base_rates(self, base_rate):
+        for slmodel in self.slmodels:
+            slmodel.information_opinion.set_base_rate(base_rate)
+
     def get_penalty(self, nb_conflict):
         return self.max_penalty*nb_conflict/(nb_conflict + self.b)
 
@@ -213,6 +218,17 @@ class EBSL:
         for slmodel in self.slmodels:
             # Get the information opinion
             slmodel.get_information_opinion(row)
+
+        # Case where the base rate strategy was: highest trust
+        # Find model with the current highest trust and use its belief as the base rate
+        if self.base_rate_choice == 1:
+            all_trust = [i.penalized_trust_opinion for i in self.slmodels]
+            highest_trust_index = find_max_belief(all_trust)
+            self.set_all_base_rates(
+                self.slmodels[highest_trust_index].information_opinion._b)
+
+        # The loop must have been splitted to avoid having to set the base rate twice (original, discounted)
+        for slmodel in self.slmodels:
             # Calculate the information opinion after discounting with penalized trust
             discounted_opinion = slmodel.get_discounted_information_opinion()
             discounted_opinions.append(discounted_opinion)
@@ -280,14 +296,15 @@ class EBSL:
         if self._debug:
             print("\nFinal opinion:", final_opinion)
             # Projected probability is made of 2 parts: belief and contribution of prior probability
-            print("Base rate contribution:",
-                  final_opinion._a * final_opinion._u)
+            print("Base rate contribution: %g" %
+                  (final_opinion._a * final_opinion._u))
 
         prob = final_opinion.projected_probability()
 
         # Set the base rate for all models to be the newly calculated projected probability
-        for slmodel in self.slmodels:
-            slmodel.information_opinion.set_base_rate(prob)
+        # According to the choice taken earlier
+        if self.base_rate_choice == 0:
+            self.set_all_base_rates(prob)
 
         return prob
 
