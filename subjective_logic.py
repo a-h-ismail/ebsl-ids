@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import copy
+from typing import Literal
 import numpy as np
 
 
@@ -132,12 +133,25 @@ def average_fusion(all_opinions: list | tuple) -> Opinion:
     return fused
 
 
+def find_max_belief(all_opinions: list | tuple):
+    "Returns the index of the highest belief in the provided opinions"
+    max = -1
+    max_index = -1
+    for i in range(len(all_opinions)):
+        if max < all_opinions[i]._b:
+            max_index = i
+            max = all_opinions[i]._b
+
+    return max_index
+
+
 class BSL_SM:
     "BSL_SM: Binomial Subjective Logic - Single Model"
 
     def __init__(self, model, trust_opinion: Opinion) -> None:
         self.model = model
         self.trust_opinion = trust_opinion
+        self.penalized_trust_opinion = copy.copy(trust_opinion)
         self.trust_penalty = 0.
         # The opinion is for class 1
         self.information_opinion = Opinion()
@@ -167,7 +181,7 @@ class BSL_SM:
 class EBSL:
     "EBSL: Ensemble Binomial Subjective Logic"
 
-    def __init__(self, conflict_threshold=0.05, max_penalty=0.5, b=1, trust_restore_speed=2, _debug=False) -> None:
+    def __init__(self, conflict_threshold=0.05, max_penalty=0.5, b=1, trust_restore_speed=2, base_rate_choice: Literal["prior", "trust"] = "prior", _debug=False) -> None:
         self.slmodels: list[BSL_SM] = []
         self.reference_opinion = Opinion()
         self.conflict_threshold = conflict_threshold
@@ -176,18 +190,27 @@ class EBSL:
         self.trust_restore_speed = trust_restore_speed
         self._debug = _debug
 
+        if base_rate_choice == "prior":
+            self.base_rate_choice = 0
+        elif base_rate_choice == "trust":
+            self.base_rate_choice = 1
+        else:
+            print("Warning: Invalid base rate choice '%s' in constructor. Using default: \"prior\"..." %
+                  (base_rate_choice))
+            self.base_rate_choice = 0
+
     def add_model(self, model: BSL_SM):
         self.slmodels.append(model)
 
     def get_penalty(self, nb_conflict):
         return self.max_penalty*nb_conflict/(nb_conflict + self.b)
 
-    def get_all_opinions_and_ref(self, data):
+    def get_all_opinions_and_ref(self, row):
         "Gets all original model opinions (by inference) then calculates the reference opinion (penalized)"
         discounted_opinions: list[Opinion] = []
         for slmodel in self.slmodels:
             # Get the information opinion
-            slmodel.get_information_opinion(data)
+            slmodel.get_information_opinion(row)
             # Calculate the information opinion after discounting with penalized trust
             discounted_opinion = slmodel.get_discounted_information_opinion()
             discounted_opinions.append(discounted_opinion)
@@ -266,11 +289,56 @@ class EBSL:
 
         return prob
 
-    def run_once(self, data) -> float:
+    def run_once(self, row) -> float:
         # First run inference for each model, estimate opinions and their penalized average
-        self.get_all_opinions_and_ref(data)
+        self.get_all_opinions_and_ref(row)
         # Find conflict between undiscounted opinions and penalized average
         self.get_all_conflicts()
         # Based on conflicts, find new trust values
         self.reevaluate_trust()
         return self.get_final_prediction()
+
+    def predict_proba(self, X) -> np.ndarray:
+        """
+        Probability estimates.
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape (n_samples, n_features)
+            The input data.
+
+        Returns
+        -------
+        y_prob : ndarray of shape (n_samples, n_classes = 2)
+            The predicted probability of the sample for each class, in order (class 0, class 1)
+        """
+        # I took that from sklearn documentation (with modifications)
+
+        nb_rows = len(X)
+        y_prob = np.empty((nb_rows, 2))
+        for input_row in range(nb_rows):
+            class1 = self.run_once(X[input_row])
+            y_prob[input_row][0] = 1.-class1
+            y_prob[input_row][1] = class1
+
+        return y_prob
+
+    def predict(self, X) -> np.ndarray:
+        """Predict using the ensemble of models added.
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape (n_samples, n_features)
+            The input data.
+
+        Returns
+        -------
+        y : ndarray, shape (n_samples)
+        """
+        nb_rows = len(X)
+        results = np.empty(nb_rows)
+        for input_row in range(nb_rows):
+            class1 = self.run_once(X[input_row])
+            results[input_row] = round(class1)
+
+        return results
