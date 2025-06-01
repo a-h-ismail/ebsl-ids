@@ -160,7 +160,7 @@ class BSL_SM:
 
     def get_information_opinion(self, data):
         """Generates the belief opinion of this model based on the prediction probability"""
-        probabilities = self.model.predict_proba(data)
+        probabilities = self.model.predict_proba(data)[0]
         self.information_opinion.set_parameters(
             probabilities[1], probabilities[0], 0)
 
@@ -338,6 +338,9 @@ class EBSL:
         """
         # I took that from sklearn documentation (with modifications)
 
+        # Convert whatever was received to a numpy array
+        # Should make lists, tuples, dataframes, arrays all usable
+        X = np.array(X)
         nb_rows = len(X)
         y_prob = np.empty((nb_rows, 2))
         for input_row in range(nb_rows):
@@ -359,6 +362,9 @@ class EBSL:
         -------
         y : ndarray, shape (n_samples)
         """
+        # Convert whatever was received to a numpy array
+        # Should make lists, tuples, dataframes, arrays all usable
+        X = np.array(X)
         nb_rows = len(X)
         results = np.empty(nb_rows)
         for input_row in range(nb_rows):
@@ -366,3 +372,18 @@ class EBSL:
             results[input_row] = round(class1)
 
         return results
+
+    def get_raw_predictions(self, X):
+        """
+        Get the original predictions for all samples in X without running subjective logic algorithms
+
+        Useful for testing against other multi-classifier models
+        """
+        X = np.array(X)
+        nb_rows = len(X)
+
+        all_results: list[np.ndarray] = []
+        for slmodel in self.slmodels:
+            all_results.append(slmodel.model.predict_proba(X))
+
+        return np.concatenate(all_results, axis=1)
