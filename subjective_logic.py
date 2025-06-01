@@ -148,8 +148,21 @@ def find_max_belief(all_opinions: list | tuple):
 class BSL_SM:
     "BSL_SM: Binomial Subjective Logic - Single Model"
 
-    def __init__(self, model, trust_opinion: Opinion) -> None:
+    def __init__(self, model, scaler, trust_opinion: Opinion) -> None:
+        """
+        Creates the building blocks required for Ensemble Binomial Subjective Logic.
+        It encapsulates an ML model, its scaler and manages subjective logic opinions (information, trust)
+
+        Parameters
+        ----------
+        model: Any binary model providing methods predict() and predict_proba() like sklearn
+
+        scaler: Should provide the transform() method like sklearn
+
+        trust_opinion: Indicates the trustworthiness of a model. Affects the contribution of each model to the final prediction.
+        """
         self.model = model
+        self.scaler = scaler
         self.trust_opinion = trust_opinion
         self.penalized_trust_opinion = copy.copy(trust_opinion)
         self.trust_penalty = 0.
@@ -158,9 +171,17 @@ class BSL_SM:
         self.conflict = 0.
         self.conflict_count = 0
 
-    def get_information_opinion(self, data):
+    def predict_proba(self, samples) -> np.ndarray:
+        """
+        Calls predict_proba of the underlying model after scaling the input samples
+        """
+        if self.scaler is not None:
+            samples = self.scaler.transform(samples)
+        return self.model.predict_proba(samples)
+
+    def get_information_opinion(self, samples):
         """Generates the belief opinion of this model based on the prediction probability"""
-        probabilities = self.model.predict_proba(data)[0]
+        probabilities = self.predict_proba(samples)[0]
         self.information_opinion.set_parameters(
             probabilities[1], probabilities[0], 0)
 
@@ -183,6 +204,24 @@ class EBSL:
     "EBSL: Ensemble Binomial Subjective Logic"
 
     def __init__(self, conflict_threshold=0.05, max_penalty=0.5, b=1, trust_restore_speed=2, base_rate_choice: Literal["prior", "trust"] = "prior", _debug=False) -> None:
+        """
+        Collection of BSL_SM models. Enables prediction aggregation using subjective logic
+
+        Parameters
+        ----------
+        conflict_threshold: The minimum value a model's conflict should have above the average conflict to reduce its trust
+
+        max_penalty: The maximun penalty added to the model's trust opinion (disbelief)
+
+        b: Inverse of speed of losing trust
+
+        trust_restore_speed: Knowing that conflict counter increments with each conflict. This indicates how much it should decrement on lack of conflict
+
+        base_rate_choice: How to choose the base rate. "prior" uses the last aggregated prediction probability.
+        "trust" uses the probability produced by the currently most trusted model
+
+        _debug: Enables debugging output
+        """
         self.slmodels: list[BSL_SM] = []
         self.reference_opinion = Opinion()
         self.conflict_threshold = conflict_threshold
@@ -384,6 +423,6 @@ class EBSL:
 
         all_results: list[np.ndarray] = []
         for slmodel in self.slmodels:
-            all_results.append(slmodel.model.predict_proba(X))
+            all_results.append(slmodel.predict_proba(X))
 
         return np.concatenate(all_results, axis=1)
