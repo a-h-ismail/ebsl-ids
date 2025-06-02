@@ -241,6 +241,8 @@ class EBSL:
                   (base_rate_choice))
             self.base_rate_choice = 0
 
+        np.set_printoptions(legacy='1.25', precision=7, suppress=True)
+
     def add_model(self, model: BSL_SM):
         self.slmodels.append(model)
 

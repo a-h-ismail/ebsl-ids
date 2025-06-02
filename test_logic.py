@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import subjective_logic as sl
 import dummy_model as dm
+import numpy as np
 
 a1 = sl.Opinion(0.8, 0.1, 0.1, 0.8)
 a2 = sl.Opinion(0.9, 0.05, 0.05, 0.8)
@@ -24,9 +25,9 @@ m3 = dm.DModel((0.2, 0.1, 0.1, 0.2, 0.1, 0.4, 0.37, 0.2))
 o1 = sl.Opinion(0.95, 0.02, 0.03)
 o2 = sl.Opinion(0.8, 0.15, 0.05)
 o3 = sl.Opinion(0.8, 0.1, 0.1)
-eb1 = sl.BSL_SM(m1, o1)
-eb2 = sl.BSL_SM(m2, o2)
-eb3 = sl.BSL_SM(m3, o3)
+eb1 = sl.BSL_SM(m1, None, o1)
+eb2 = sl.BSL_SM(m2, None, o2)
+eb3 = sl.BSL_SM(m3, None, o3)
 
 # Create a new ensemble classifier and set the models
 eclassifier = sl.EBSL(_debug=True)
@@ -34,5 +35,4 @@ eclassifier.add_model(eb1)
 eclassifier.add_model(eb2)
 eclassifier.add_model(eb3)
 
-for i in range(8):
-    print(eclassifier.run_once([]))
+print(eclassifier.predict(np.empty((8, 1))))
