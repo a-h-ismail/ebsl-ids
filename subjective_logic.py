@@ -314,7 +314,7 @@ class EBSL:
                     self.slmodels[i].conflict_count)
 
         if self._debug:
-            print("Conflict:", all_conflict)
+            print("Conflict:", ["{0:0.7f}".format(i) for i in all_conflict])
             print("Average conflict: %g" % average_conflict)
             print("Distance to average:", distance_to_average_conf)
             for i in range(len(self.slmodels)):
