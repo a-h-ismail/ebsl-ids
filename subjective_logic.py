@@ -39,7 +39,7 @@ class Opinion:
         discounted = Opinion()
         discounted._b = trust._b * self._b
         discounted._d = trust._b * self._d
-        discounted._u = trust._d + trust._u + trust._b * self._u
+        discounted._u = 1 - discounted._b - discounted._d
         discounted._a = self._a
 
         if inplace:
@@ -51,25 +51,22 @@ class Opinion:
 
     def modify_trust(self, offset: float, inplace=False):
         "Returns the same opinion with b' = b - offset and d' = d + offset"
-        # The max positive offset is the belief (because b can't be negative)
-        # The min function caps the offset at self._b
-        # Reminder: b + d + u = 1
-        if offset >= 0:
-            offset = min(offset, self._b)
-        # Same logic, we get max negative offset = disbelief
-        # We use max instead of min here because values are negative
-        elif offset < 0:
-            offset = max(offset, self._d)
+        if offset == 0:
+            return copy.copy(self)
 
-        penalized_trust = copy.copy(self)
-        penalized_trust._b -= offset
-        penalized_trust._d += offset
+        # -d <= offset <= b
+        # Reminder: b + d + u = 1 and b,d >= 0
+        offset = np.clip(offset, -self._d, self._b)
 
         if inplace:
-            self._b = penalized_trust._b
-            self._d = penalized_trust._d
-
-        return penalized_trust
+            self._b -= offset
+            self._d += offset
+            return self
+        else:
+            penalized_trust = copy.copy(self)
+            penalized_trust._b -= offset
+            penalized_trust._d += offset
+            return penalized_trust
 
     def projected_probability(self) -> float:
         return self._b + self._a * self._u
