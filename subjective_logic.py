@@ -166,7 +166,7 @@ class BSL_SM:
         # The opinion is for class 1
         self.information_opinion = Opinion()
         self.conflict = 0.
-        self.conflict_count = 0
+        self.conflict_count = 0.
 
     def predict_proba(self, samples) -> np.ndarray:
         """
@@ -200,7 +200,7 @@ class BSL_SM:
 class EBSL:
     "EBSL: Ensemble Binomial Subjective Logic"
 
-    def __init__(self, conflict_threshold=0.05, max_penalty=0.5, b=1, trust_restore_speed=2, base_rate_choice: Literal["prior", "trust"] = "prior", _debug=False) -> None:
+    def __init__(self, conflict_threshold=0.05, max_penalty=0.5, b=1, trust_restore_speed=2., base_rate_choice: Literal["prior", "trust"] = "prior", _debug=False) -> None:
         """
         Collection of BSL_SM models. Enables prediction aggregation using subjective logic
 
@@ -212,7 +212,7 @@ class EBSL:
 
         b: Inverse of speed of losing trust
 
-        trust_restore_speed: Knowing that conflict counter increments with each conflict. This indicates how much it should decrement on lack of conflict
+        trust_restore_speed: Indicates trust restoration step size on lack of conflict (mistrust step size is 1)
 
         base_rate_choice: How to choose the base rate. "prior" uses the last aggregated prediction probability.
         "trust" uses the probability produced by the currently most trusted model
@@ -279,11 +279,11 @@ class EBSL:
                 print("Model %d: " % (i), end="")
                 print(self.slmodels[i].information_opinion)
 
-            print("\nDiscounted opinions")
+            print("\nDiscounted opinions (before update)")
             for i in range(len(self.slmodels)):
                 print("Model %d: " % (i), end="")
                 print(discounted_opinions[i])
-            print("Reference opinion (penalized):",
+            print("Reference opinion (penalized before update):",
                   self.reference_opinion, "\n")
 
     def get_all_conflicts(self) -> None:
@@ -331,13 +331,20 @@ class EBSL:
         # The base rate should be the same everywhere, so set it to the final opinion (or it will stay 0)
         final_opinion.set_base_rate(discounted_opinions[0]._a)
 
+        prob = final_opinion.projected_probability()
+
         if self._debug:
+            print("\nDiscounted opinions (after update)")
+            for i in range(len(self.slmodels)):
+                print("Model %d: " % (i), end="")
+                print(discounted_opinions[i])
+            print("Reference opinion (penalized after update):",
+                  self.reference_opinion)
             print("\nFinal opinion:", final_opinion)
             # Projected probability is made of 2 parts: belief and contribution of prior probability
             print("Base rate contribution: %g" %
                   (final_opinion._a * final_opinion._u))
-
-        prob = final_opinion.projected_probability()
+            print("Probability = %g" % prob)
 
         # Set the base rate for all models to be the newly calculated projected probability
         # According to the choice taken earlier
