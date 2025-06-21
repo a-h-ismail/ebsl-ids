@@ -167,18 +167,25 @@ class BSL_SM:
         self.information_opinion = Opinion()
         self.conflict = 0.
         self.conflict_count = 0.
+        # The prediction cache is maintained here, but the current index is in EBSL
+        self.prediction_cache = ()
 
-    def predict_proba(self, samples) -> np.ndarray:
+    def predict_proba_to_cache(self, samples):
         """
         Calls predict_proba of the underlying model after scaling the input samples
         """
         if self.scaler is not None:
             samples = self.scaler.transform(samples)
-        return self.model.predict_proba(samples)
+        # Convert to a tuple for the most efficient element by element access in Python
+        self.prediction_cache = tuple(self.model.predict_proba(samples))
 
-    def get_information_opinion(self, samples):
+    def get_prediction(self, index: int) -> tuple:
+        p = (self.prediction_cache[index][0], self.prediction_cache[index][1])
+        return p
+
+    def get_information_opinion(self, index):
         """Generates the belief opinion of this model based on the prediction probability"""
-        probabilities = self.predict_proba(samples)[0]
+        probabilities = self.get_prediction(index)
         self.information_opinion.set_parameters(
             probabilities[1], probabilities[0], 0)
 
@@ -227,7 +234,8 @@ class EBSL:
         self.trust_restore_speed = trust_restore_speed
         self._debug = _debug
         # Used in debug output iteration indicator
-        self._debug_iteration_index = 0
+        self.cache_i = 0
+        self.cache_max = 0
 
         if base_rate_choice == "prior":
             self.base_rate_choice = 0
@@ -250,12 +258,12 @@ class EBSL:
     def get_penalty(self, nb_conflict):
         return self.max_penalty*nb_conflict/(nb_conflict + self.b)
 
-    def get_all_opinions_and_ref(self, row):
+    def get_all_opinions_and_ref(self):
         "Gets all original model opinions (by inference) then calculates the reference opinion (penalized)"
         discounted_opinions: list[Opinion] = []
         for slmodel in self.slmodels:
             # Get the information opinion
-            slmodel.get_information_opinion(row)
+            slmodel.get_information_opinion(self.cache_i)
 
         # Case where the base rate strategy was: highest trust
         # Find model with the current highest trust and use its belief as the base rate
@@ -272,6 +280,7 @@ class EBSL:
             discounted_opinions.append(discounted_opinion)
 
         self.reference_opinion = average_fusion(discounted_opinions)
+        self.cache_i += 1
 
         if self._debug:
             print("Original information opinion")
@@ -353,14 +362,20 @@ class EBSL:
 
         return prob
 
-    def run_once(self, row) -> float:
+    def _gen_predict_cache(self, samples):
+        """Fills the prediction cache of all models for the current samples"""
+        for model in self.slmodels:
+            model.predict_proba_to_cache(samples)
+        self.cache_i = 0
+        self.cache_max = samples.shape[0]
+
+    def run_once(self) -> float:
         if self._debug:
             print("--------------------------------------------")
-            print("Iteration", self._debug_iteration_index)
-            self._debug_iteration_index += 1
+            print("Iteration", self.cache_i)
 
-        # First run inference for each model, estimate opinions and their penalized average
-        self.get_all_opinions_and_ref(row)
+        # Estimate opinions and their penalized average (assuming all inference is done earlier)
+        self.get_all_opinions_and_ref()
         # Find conflict between undiscounted opinions and penalized average
         self.get_all_conflicts()
         # Based on conflicts, find new trust values
@@ -373,7 +388,7 @@ class EBSL:
 
         Parameters
         ----------
-        X : {array-like, sparse matrix} of shape (n_samples, n_features)
+        X : Dataframe of shape (n_samples, n_features)
             The input data.
 
         Returns
@@ -385,11 +400,11 @@ class EBSL:
 
         # Convert whatever was received to a numpy array
         # Should make lists, tuples, dataframes, arrays all usable
-        X = np.array(X)
-        nb_rows = len(X)
+        self._gen_predict_cache(X)
+        nb_rows = X.shape[0]
         y_prob = np.empty((nb_rows, 2))
         for input_row in range(nb_rows):
-            class1 = self.run_once(X[input_row])
+            class1 = self.run_once()
             y_prob[input_row][0] = 1.-class1
             y_prob[input_row][1] = class1
 
@@ -400,35 +415,19 @@ class EBSL:
 
         Parameters
         ----------
-        X : {array-like, sparse matrix} of shape (n_samples, n_features)
+        X : Dataframe of shape (n_samples, n_features)
             The input data.
 
         Returns
         -------
         y : ndarray, shape (n_samples)
         """
-        # Convert whatever was received to a numpy array
-        # Should make lists, tuples, dataframes, arrays all usable
-        X = np.array(X)
-        nb_rows = len(X)
+        self._gen_predict_cache(X)
+        nb_rows = X.shape[0]
         results = np.empty(nb_rows)
         for input_row in range(nb_rows):
-            class1 = self.run_once(X[input_row])
+            print(input_row)
+            class1 = self.run_once()
             results[input_row] = round(class1)
 
         return results
-
-    def get_raw_predictions(self, X):
-        """
-        Get the original predictions for all samples in X without running subjective logic algorithms
-
-        Useful for testing against other multi-classifier models
-        """
-        X = np.array(X)
-        nb_rows = len(X)
-
-        all_results: list[np.ndarray] = []
-        for slmodel in self.slmodels:
-            all_results.append(slmodel.predict_proba(X))
-
-        return np.concatenate(all_results, axis=1)
