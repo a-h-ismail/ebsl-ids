@@ -125,7 +125,6 @@ def average_fusion(all_opinions: list | tuple) -> Opinion:
 
     # Calculate dx
     fused._d = 1 - fused._b - fused._u
-    fused.validate_opinion()
 
     return fused
 
@@ -191,13 +190,11 @@ class BSL_SM:
     def get_discounted_information_opinion(self) -> Opinion:
         """Calculates the discounted opinion according to the trust opinion modified with trust penalty
 
-        Warning: This function assumes you already called get_information_opinion()
+        Warning: This function assumes you already called get_information_opinion() and updated the penalized trust if necessary
 
         Returns: A new opinion after trust discounting (original opinion unchanged)
         """
-        modified_trust = self.trust_opinion.modify_trust(self.trust_penalty)
-        self.penalized_trust_opinion = modified_trust
-        return self.information_opinion.trust_discounting(modified_trust)
+        return self.information_opinion.trust_discounting(self.penalized_trust_opinion)
 
     def set_prior_probability(self, probability: float):
         self.trust_opinion.set_base_rate(probability)
@@ -307,16 +304,24 @@ class EBSL:
         distance_to_average_conf = np.subtract(all_conflict, average_conflict)
 
         for i in range(len(distance_to_average_conf)):
+            slmodel = self.slmodels[i]
             if distance_to_average_conf[i] > self.conflict_threshold:
-                self.slmodels[i].conflict_count += 1
-                self.slmodels[i].trust_penalty = self.get_penalty(
-                    self.slmodels[i].conflict_count)
+                slmodel.conflict_count += 1
+                slmodel.trust_penalty = self.get_penalty(
+                    slmodel.conflict_count)
 
-            elif self.slmodels[i].conflict_count != 0:
-                self.slmodels[i].conflict_count -= min(
-                    self.trust_restore_speed, self.slmodels[i].conflict_count)
-                self.slmodels[i].trust_penalty = self.get_penalty(
-                    self.slmodels[i].conflict_count)
+                # Recalculate the penalized trust opinion immediately (to avoid always recalculating all opinions)
+                slmodel.penalized_trust_opinion = slmodel.trust_opinion.modify_trust(
+                    slmodel.trust_penalty)
+
+            elif slmodel.conflict_count != 0:
+                slmodel.conflict_count -= min(
+                    self.trust_restore_speed, slmodel.conflict_count)
+                slmodel.trust_penalty = self.get_penalty(
+                    slmodel.conflict_count)
+
+                slmodel.penalized_trust_opinion = slmodel.trust_opinion.modify_trust(
+                    slmodel.trust_penalty)
 
         if self._debug:
             print("Conflict:", ["{0:0.7f}".format(i) for i in all_conflict])
