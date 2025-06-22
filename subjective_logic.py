@@ -178,17 +178,15 @@ class BSL_SM:
             samples = samples[self.scaler.get_feature_names_out()]
             samples = self.scaler.transform(samples)
         # Convert to a tuple for the most efficient element by element access in Python
-        self.prediction_cache = tuple(self.model.predict_proba(samples))
+        self.prediction_cache = tuple(self.model.predict_proba(samples)[:, 1])
 
-    def get_prediction(self, index: int) -> tuple:
-        p = (self.prediction_cache[index][0], self.prediction_cache[index][1])
-        return p
+    def get_prediction(self, index: int) -> float:
+        return self.prediction_cache[index]
 
     def get_information_opinion(self, index):
         """Generates the belief opinion of this model based on the prediction probability"""
-        probabilities = self.get_prediction(index)
-        self.information_opinion.set_parameters(
-            probabilities[1], probabilities[0], 0)
+        p = self.get_prediction(index)
+        self.information_opinion.set_parameters(p, 1-p, 0)
 
     def get_discounted_information_opinion(self) -> Opinion:
         """Calculates the discounted opinion according to the trust opinion modified with trust penalty
@@ -383,34 +381,6 @@ class EBSL:
         self.reevaluate_trust()
         return self.get_final_prediction()
 
-    def predict_proba(self, X) -> np.ndarray:
-        """
-        Probability estimates.
-
-        Parameters
-        ----------
-        X : Dataframe of shape (n_samples, n_features)
-            The input data.
-
-        Returns
-        -------
-        y_prob : ndarray of shape (n_samples, n_classes = 2)
-            The predicted probability of the sample for each class, in order (class 0, class 1)
-        """
-        # I took that from sklearn documentation (with modifications)
-
-        # Convert whatever was received to a numpy array
-        # Should make lists, tuples, dataframes, arrays all usable
-        self._gen_predict_cache(X)
-        nb_rows = X.shape[0]
-        y_prob = np.empty((nb_rows, 2))
-        for input_row in range(nb_rows):
-            class1 = self.run_once()
-            y_prob[input_row][0] = 1.-class1
-            y_prob[input_row][1] = class1
-
-        return y_prob
-
     def predict(self, X) -> np.ndarray:
         """Predict using the ensemble of models added.
 
@@ -427,8 +397,29 @@ class EBSL:
         nb_rows = X.shape[0]
         results = np.empty(nb_rows)
         for input_row in range(nb_rows):
-            print(input_row)
             class1 = self.run_once()
             results[input_row] = round(class1)
 
         return results
+
+    def _merge_caches(self):
+        """Combines all predictions"""
+        predictions: list[tuple] = []
+        for model in self.slmodels:
+            predictions.append(model.prediction_cache)
+        return np.asarray(predictions).T
+
+    def _hard_vote(self):
+        caches = self._merge_caches()
+        votes = np.round(caches)
+        sum_votes = np.sum(votes, axis=1)
+        threshold = votes.shape[1]/2
+        pred = np.where(sum_votes > threshold, 1, 0)
+        return pred
+
+    def _soft_vote(self):
+        caches = self._merge_caches()
+        sum_votes = np.sum(caches, axis=1)
+        threshold = caches.shape[1]/2
+        pred = np.where(sum_votes > threshold, 1, 0)
+        return pred
