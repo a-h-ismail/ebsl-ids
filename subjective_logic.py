@@ -175,6 +175,7 @@ class BSL_SM:
         Calls predict_proba of the underlying model after scaling the input samples
         """
         if self.scaler is not None:
+            samples = samples[self.scaler.get_feature_names_out()]
             samples = self.scaler.transform(samples)
         # Convert to a tuple for the most efficient element by element access in Python
         self.prediction_cache = tuple(self.model.predict_proba(samples))
