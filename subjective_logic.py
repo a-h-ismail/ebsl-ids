@@ -203,7 +203,7 @@ class BSL_SM:
 class EBSL:
     "EBSL: Ensemble Binomial Subjective Logic"
 
-    def __init__(self, conflict_threshold=0.05, max_penalty=0.5, b=1, trust_restore_speed=2., base_rate_choice: Literal["prior", "trust"] = "prior", _debug=False) -> None:
+    def __init__(self, conflict_threshold=0.05, max_penalty=0.5, b=1., trust_restore_speed=2., base_rate_choice: Literal["prior", "trust"] = "prior", _debug=False) -> None:
         """
         Collection of BSL_SM models. Enables prediction aggregation using subjective logic
 
@@ -232,7 +232,7 @@ class EBSL:
         # Used in debug output iteration indicator
         self.cache_i = 0
         self.cache_max = 0
-
+        self._base_rate_choice_str = base_rate_choice
         if base_rate_choice == "prior":
             self.base_rate_choice = 0
         elif base_rate_choice == "trust":
@@ -243,6 +243,9 @@ class EBSL:
             self.base_rate_choice = 0
 
         np.set_printoptions(legacy='1.25', precision=7, suppress=True)
+
+    def __str__(self) -> str:
+        return "EBSL classifier: conflict_threshold=%g, max_penalty=%g, b=%g, trust_restore_speed=%g, base_rate_choice:\"%s\", nb_of_classifiers = %d" % (self.conflict_threshold, self.max_penalty, self.b, self.trust_restore_speed, self._base_rate_choice_str, len(self.slmodels))
 
     def add_model(self, model: BSL_SM):
         self.slmodels.append(model)
@@ -412,7 +415,7 @@ class EBSL:
         predictions: list[tuple] = []
         for model in self.slmodels:
             predictions.append(model.prediction_cache)
-        return np.asarray(predictions).T
+        return np.array(predictions).T
 
     def _hard_vote(self):
         caches = self._merge_caches()
