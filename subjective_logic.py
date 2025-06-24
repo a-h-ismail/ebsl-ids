@@ -19,6 +19,10 @@ class Opinion:
         if base_rate != -1:
             self._a = base_rate
 
+        # Do not validate b,d,u,a if the opinion is default initialized
+        if belief == 0. and disbelief == 0. and uncertainty == 1. and base_rate == 0.:
+            return
+
         self.validate_opinion()
 
     def validate_opinion(self):
@@ -34,9 +38,12 @@ class Opinion:
         "Returns (b, d, u, a) of this opinion"
         return (self._b, self._d, self._u, self._a)
 
-    def trust_discounting(self, trust, inplace: bool = False):
+    def trust_discounting(self, trust, inplace: bool = False, out=None):
         "Discount trust of this opinion according to a trust opinion. Returns the discounted opinion regardless of inplace value"
-        discounted = Opinion()
+        if out is not None:
+            discounted = out
+        else:
+            discounted = Opinion()
         discounted._b = trust._b * self._b
         discounted._d = trust._b * self._d
         discounted._u = 1 - discounted._b - discounted._d
@@ -116,9 +123,13 @@ def _uncertainty_product(all_opinions: list | tuple, exception_index) -> float:
     return product
 
 
-def average_fusion(all_opinions: list | tuple) -> Opinion:
+def average_fusion(all_opinions: list | tuple, out=None) -> Opinion:
     "Calculate the opinion resulting from the average fusion of all opinions passed as argument"
-    fused = Opinion()
+    if out is not None:
+        fused = out
+    else:
+        fused = Opinion()
+
     numerator = 0
     denominator = 0
     nb_opinion = len(all_opinions)
@@ -180,8 +191,10 @@ class BSL_SM:
         self.trust_penalty = 0.
         # The opinion is for class 1
         self.information_opinion = Opinion()
+        self.discounted_information_opinion = Opinion()
         self.conflict = 0.
         self.conflict_count = 0.
+        self.cumulative_conflict = 0
         # The prediction cache is maintained here, but the current index is in EBSL
         self.prediction_cache = ()
 
@@ -210,7 +223,9 @@ class BSL_SM:
 
         Returns: A new opinion after trust discounting (original opinion unchanged)
         """
-        return self.information_opinion.trust_discounting(self.penalized_trust_opinion)
+        self.information_opinion.trust_discounting(
+            self.penalized_trust_opinion, out=self.discounted_information_opinion)
+        return self.discounted_information_opinion
 
     def set_prior_probability(self, probability: float):
         self.trust_opinion.set_base_rate(probability)
@@ -279,16 +294,24 @@ class EBSL:
             slmodel.information_opinion.set_base_rate(base_rate)
 
     def _save_state(self, user_id):
-        # Collect current penalized trust opinions and store them separately
-        conflict_counters = []
-        for slmodel in self.slmodels:
-            conflict_counters.append(slmodel.conflict_count)
+        if user_id in self.state_store:
+            # Update the stored state instead of allocating a new one with updated information
+            final_opinion, conflict_counters = self.state_store[user_id]
+            for i in range(len(conflict_counters)):
+                conflict_counters[i] = self.slmodels[i].conflict_count
+            final_opinion.copy(self.last_final_opinion)
+        else:
+            # Collect current penalized trust opinions and store them separately
+            conflict_counters = []
+            for slmodel in self.slmodels:
+                conflict_counters.append(slmodel.conflict_count)
 
-        self.state_store[user_id] = (self.last_final_opinion, conflict_counters)
+            self.state_store[user_id] = (copy.copy(self.last_final_opinion), conflict_counters)
 
     def _load_state(self, user_id):
         if user_id in self.state_store:
-            (self.last_final_opinion, conflict_counters) = self.state_store[user_id]
+            (final_opinion, conflict_counters) = self.state_store[user_id]
+            self.last_final_opinion.copy(final_opinion)
             # Now set the base rate for all models information opinions (overwriting the old base rate)
             self.set_all_base_rates(round(self.last_final_opinion.projected_probability()))
             # Restore the conflict counter and corresponding penalized trust
@@ -327,7 +350,7 @@ class EBSL:
             discounted_opinions.append(discounted_opinion)
 
         if self.base_rate_choice == 1:
-            self.reference_opinion = average_fusion(discounted_opinions)
+            average_fusion(discounted_opinions, out=self.reference_opinion)
 
         if self._debug:
             print("Original information opinion")
@@ -353,8 +376,7 @@ class EBSL:
         reference = self.reference_opinion
 
         for slmodel in self.slmodels:
-            slmodel.conflict = slmodel.information_opinion.calculate_conflict(
-                reference)
+            slmodel.conflict = slmodel.information_opinion.calculate_conflict(reference)
 
     def reevaluate_trust(self) -> None:
         """Updates the trust for each model according to the conflict"""
@@ -366,19 +388,20 @@ class EBSL:
             slmodel = self.slmodels[i]
             if distance_to_average_conf[i] > self.conflict_threshold:
                 slmodel.conflict_count += 1
-                slmodel.trust_penalty = self.get_penalty(
-                    slmodel.conflict_count)
+                slmodel.cumulative_conflict += 1
+                slmodel.trust_penalty = self.get_penalty(slmodel.conflict_count)
 
                 # Recalculate the penalized trust opinion immediately (to avoid always recalculating all opinions)
                 slmodel.trust_opinion.modify_trust(slmodel.trust_penalty, out=slmodel.penalized_trust_opinion)
+                # And the new discounted information opinion
+                slmodel.get_discounted_information_opinion()
 
             elif slmodel.conflict_count != 0:
-                slmodel.conflict_count -= min(
-                    self.trust_restore_speed, slmodel.conflict_count)
-                slmodel.trust_penalty = self.get_penalty(
-                    slmodel.conflict_count)
+                slmodel.conflict_count -= min(self.trust_restore_speed, slmodel.conflict_count)
+                slmodel.trust_penalty = self.get_penalty(slmodel.conflict_count)
 
                 slmodel.trust_opinion.modify_trust(slmodel.trust_penalty, out=slmodel.penalized_trust_opinion)
+                slmodel.get_discounted_information_opinion()
 
         if self._debug:
             print("Conflict:", ["{0:0.7f}".format(i) for i in all_conflict])
@@ -393,10 +416,10 @@ class EBSL:
         "Calculates the final prediction using discounted information opinion. Updates the base rate for all model opinions"
         discounted_opinions: list[Opinion] = []
         for slmodel in self.slmodels:
-            discounted_opinions.append(
-                slmodel.get_discounted_information_opinion())
+            discounted_opinions.append(slmodel.discounted_information_opinion)
 
-        final_opinion = average_fusion(discounted_opinions)
+        final_opinion = self.last_final_opinion
+        average_fusion(discounted_opinions, out=final_opinion)
         # The base rate should be the same everywhere, so set it to the final opinion (or it will stay 0)
         final_opinion.set_base_rate(discounted_opinions[0]._a)
 
@@ -417,7 +440,6 @@ class EBSL:
         # According to the choice taken earlier
         if self.base_rate_choice == 0:
             self.last_id = self.id_list[self.cache_i]
-            self.last_final_opinion = final_opinion
 
         # Preparing for the next iteration
         self.cache_i += 1
