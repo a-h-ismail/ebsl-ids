@@ -274,12 +274,12 @@ class EBSL:
         self._base_rate_choice_str = base_rate_choice
         self.last_final_opinion = Opinion()
         self._empty_opinion = Opinion()
+        # Track the classifier state per user
+        self.state_store = dict()
+        self.id_col = id_col
 
         if base_rate_choice == "prior":
             self.base_rate_choice = 0
-            # Tracking the base rate per user ID is necessary for the correct operation of "prior" mode
-            self.state_store = dict()
-            self.id_col = id_col
         elif base_rate_choice == "trust":
             self.base_rate_choice = 1
         else:
@@ -359,6 +359,7 @@ class EBSL:
             discounted_opinion = slmodel.get_discounted_information_opinion()
             discounted_opinions.append(discounted_opinion)
 
+        # Perform average fusion only in case of base rate source = trust
         if self.base_rate_choice == 1:
             average_fusion(discounted_opinions, out=self.reference_opinion)
 
@@ -384,6 +385,8 @@ class EBSL:
             self.reference_opinion._d = 1 - a
             self.reference_opinion._u = 0
 
+        # If base rate choice is 1, the ref opinion is stored earlier in self
+        # Otherwise it is updated as you see above
         reference = self.reference_opinion
 
         for slmodel in self.slmodels:
@@ -409,7 +412,7 @@ class EBSL:
                     slmodel.trust_penalty -= slmodel.negative_bonus
                     slmodel.curr_bonus = slmodel.negative_bonus
 
-                # Recalculate the penalized trust opinion immediately (to avoid always recalculating all opinions)
+                # Recalculate the penalized trust opinion immediately (to avoid always recalculating all trust opinions later)
                 slmodel.trust_opinion.modify_trust(slmodel.trust_penalty, out=slmodel.penalized_trust_opinion)
                 # And the new discounted information opinion
                 slmodel.get_discounted_information_opinion()
@@ -459,8 +462,7 @@ class EBSL:
 
         # Set the base rate for all models to be the newly calculated projected probability
         # According to the choice taken earlier
-        if self.base_rate_choice == 0:
-            self.last_id = self.id_list[self.cache_i]
+        self.last_id = self.id_list[self.cache_i]
 
         # Preparing for the next iteration
         self.cache_i += 1
@@ -480,14 +482,13 @@ class EBSL:
             print("--------------------------------------------")
             print("Iteration", self.cache_i)
 
-        if self.base_rate_choice == 0:
-            current_id = self.id_list[self.cache_i]
-            if current_id == self.last_id:
-                # We only need to update the base rate in this case
-                self.set_all_base_rates(self.last_final_opinion.projected_probability())
-            else:
-                self._save_state(self.last_id)
-                self._load_state(current_id)
+        current_id = self.id_list[self.cache_i]
+        if current_id == self.last_id and self.base_rate_choice == 0:
+            # We only need to update the base rate in this case
+            self.set_all_base_rates(self.last_final_opinion.projected_probability())
+        else:
+            self._save_state(self.last_id)
+            self._load_state(current_id)
 
         # Estimate opinions and their penalized average (assuming all inference is done earlier)
         self.get_all_opinions_and_ref()
