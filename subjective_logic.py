@@ -172,7 +172,7 @@ def find_max_belief(all_opinions: list | tuple):
 class BSL_SM:
     "BSL_SM: Binomial Subjective Logic - Single Model"
 
-    def __init__(self, model, scaler, trust_opinion: Opinion) -> None:
+    def __init__(self, model, scaler, trust_opinion=Opinion()) -> None:
         """
         Creates the building blocks required for Ensemble Binomial Subjective Logic.
         It encapsulates an ML model, its scaler and manages subjective logic opinions (information, trust)
@@ -203,6 +203,10 @@ class BSL_SM:
         # The prediction cache is maintained here, but the current index is in EBSL
         self.prediction_cache = ()
 
+    def trust_from_mcc(self, mcc: float):
+        """Sets the trust opinion of this model using its Matthews correlation coefficient (MCC)"""
+        self.trust_opinion.set_parameters(mcc, 1-mcc, 0)
+
     def predict_proba_to_cache(self, samples):
         """
         Calls predict_proba of the underlying model after scaling the input samples
@@ -212,6 +216,7 @@ class BSL_SM:
             samples = self.scaler.transform(samples)
         # Convert to a tuple for the most efficient element by element access in Python
         self.prediction_cache = tuple(self.model.predict_proba(samples)[:, 1])
+        self.ncumulative_conflict = self.pcumulative_conflict = 0
 
     def get_prediction(self, index: int) -> float:
         return self.prediction_cache[index]
@@ -421,9 +426,13 @@ class EBSL:
 
             elif slmodel.conflict_count != 0:
                 slmodel.conflict_count -= min(self.trust_restore_speed, slmodel.conflict_count)
-                slmodel.trust_penalty = self._get_penalty(slmodel.conflict_count)
-                if slmodel.trust_penalty != 0:
-                   slmodel.trust_penalty -= slmodel.curr_bonus
+
+                if slmodel.conflict_count == 0:
+                    # Reset both counters
+                    slmodel.trust_penalty = 0
+                    slmodel.curr_bonus = 0
+                else:
+                    slmodel.trust_penalty = self._get_penalty(slmodel.conflict_count) - slmodel.curr_bonus
 
                 # Same optimization as above
                 slmodel.trust_opinion.modify_trust(slmodel.trust_penalty, out=slmodel.penalized_trust_opinion)
