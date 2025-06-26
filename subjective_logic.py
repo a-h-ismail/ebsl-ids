@@ -261,7 +261,7 @@ class EBSL:
         base_rate_choice: How to choose the base rate. "prior" uses the last aggregated prediction probability.
         "trust" uses the probability produced by the currently most trusted model
 
-        id_col: Name of the column containing the "user" identifier, required to use "prior" mode
+        id_col: Name of the column containing the "user" identifier. Necessary to track trust for each user separately
 
         _debug: Enables debugging output
         """
@@ -380,7 +380,7 @@ class EBSL:
             for i in range(len(self.slmodels)):
                 print("Model %d: " % (i), end="")
                 print(discounted_opinions[i])
-            print("Reference opinion (penalized before update):",
+            print("Reference opinion (before update):",
                   self._reference_opinion, "\n")
 
     def _get_all_conflicts(self) -> None:
@@ -439,13 +439,15 @@ class EBSL:
                 slmodel.get_discounted_information_opinion()
 
         if self._debug:
-            print("Conflict:", ["{0:0.7f}".format(i) for i in all_conflict])
+            print("Conflict:", ["{0:0.3f}".format(i) for i in all_conflict])
             print("Average conflict: %g" % average_conflict)
             print("Distance to average:", distance_to_average_conf)
             for i in range(len(self.slmodels)):
-                cc = self.slmodels[i].conflict_count
-                penalty = self.slmodels[i].trust_penalty
-                print("Model %d: Conflict count = %g, penalty = %g" % (i, cc, penalty))
+                model = self.slmodels[i]
+                cc = model.conflict_count
+                penalty = model.trust_penalty
+                bonus = model.curr_bonus
+                print("Model %d: Conflict count = %g, penalty = %g, bonus = %g" % (i, cc, penalty, bonus))
 
     def _get_final_prediction(self) -> float:
         "Calculates the final prediction using discounted information opinion. Updates the base rate for all model opinions"
@@ -465,7 +467,7 @@ class EBSL:
             for i in range(len(self.slmodels)):
                 print("Model %d: " % (i), end="")
                 print(discounted_opinions[i])
-            print("Reference opinion (penalized after update):", self._reference_opinion)
+            print("Reference opinion (after update):", self._reference_opinion)
             print("\nFinal opinion:", final_opinion)
             # Projected probability is made of 2 parts: belief and contribution of prior probability
             print("Base rate contribution: %g" % (final_opinion._a * final_opinion._u))
