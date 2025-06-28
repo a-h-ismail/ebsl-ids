@@ -90,8 +90,7 @@ class Opinion:
 
     def calculate_conflict(self, reference) -> float:
         "Calculates conflict of this opinion relative to a reference."
-        prob_dist = abs(self.projected_probability() -
-                        reference.projected_probability())
+        prob_dist = abs(self.projected_probability() - reference.projected_probability())
         conjunctive_conf = (1-reference._u)*(1-self._u)
         return prob_dist * conjunctive_conf
 
@@ -141,12 +140,7 @@ def average_fusion(all_opinions: list | tuple, out=None) -> Opinion:
         denominator += u_product
     fused._b = numerator / denominator
 
-    # Calculating ux
-    denominator = 0
-    for i in range(nb_opinion):
-        u_product = _uncertainty_product(all_opinions, i)
-        denominator += u_product
-
+    # Calculating ux (reuse denominator calculated above)
     u_product = _uncertainty_product(all_opinions, -1)
     numerator = u_product * nb_opinion
     fused._u = numerator / denominator
@@ -191,7 +185,8 @@ class BSL_SM:
         self.penalized_trust_opinion = copy.copy(trust_opinion)
         self.trust_penalty = 0.
         # The opinion is for class 1
-        self.information_opinion = Opinion()
+        # Set uncertainty to 0 here so we don't need to keep setting it to 0 everytime we get new information
+        self.information_opinion = Opinion(1, 0, 0)
         self.discounted_information_opinion = Opinion()
         self.conflict = 0.
         self.conflict_count = 0.
@@ -224,7 +219,8 @@ class BSL_SM:
     def get_information_opinion(self, index):
         """Generates the belief opinion of this model based on the prediction probability"""
         p = self.get_prediction(index)
-        self.information_opinion.set_parameters(p, 1-p, 0)
+        self.information_opinion._b = p
+        self.information_opinion._d = 1-p
 
     def get_discounted_information_opinion(self) -> Opinion:
         """Calculates the discounted opinion according to the trust opinion modified with trust penalty
@@ -390,7 +386,6 @@ class EBSL:
             a = self.slmodels[0].information_opinion._a
             self._reference_opinion._b = a
             self._reference_opinion._d = 1 - a
-            self._reference_opinion._u = 0
 
         # If base rate choice is 1, the ref opinion is stored earlier in self
         # Otherwise it is updated as you see above
@@ -429,8 +424,7 @@ class EBSL:
 
                 if slmodel.conflict_count == 0:
                     # Reset both counters
-                    slmodel.trust_penalty = 0
-                    slmodel.curr_bonus = 0
+                    slmodel.trust_penalty = slmodel.curr_bonus = 0
                 else:
                     slmodel.trust_penalty = self._get_penalty(slmodel.conflict_count) - slmodel.curr_bonus
 
@@ -520,6 +514,9 @@ class EBSL:
         y : ndarray, shape (n_samples)
         """
         self._gen_predict_cache(X)
+        # Set once here and forget it (in case of prior not trust)
+        if self._base_rate_choice == 0:
+            self._reference_opinion._u = 0
         nb_rows = X.shape[0]
         results = np.empty(nb_rows)
         for input_row in range(nb_rows):
