@@ -2,6 +2,7 @@
 from array import array
 import copy
 from typing import Literal
+from uuid import uuid4
 import numpy as np
 import pandas as pd
 
@@ -168,7 +169,7 @@ def find_max_belief(all_opinions: list | tuple):
 class BSL_SM:
     "BSL_SM: Binomial Subjective Logic - Single Model"
 
-    def __init__(self, model, scaler, trust_opinion=Opinion()) -> None:
+    def __init__(self, model, scaler, name="", trust_opinion=Opinion()) -> None:
         """
         Creates the building blocks required for Ensemble Binomial Subjective Logic.
         It encapsulates an ML model, its scaler and manages subjective logic opinions (information, trust)
@@ -199,10 +200,19 @@ class BSL_SM:
         self.curr_bonus = 0.
         # The prediction cache is maintained here, but the current index is in EBSL
         self.prediction_cache: array
+        # Generate a random unique name if the user doesn't provide a name
+        if name == "":
+            self.name = str(uuid4()).replace('-', '')[:16]
+        else:
+            self.name = name
 
     def trust_from_mcc(self, mcc: float):
         """Sets the trust opinion of this model using its Matthews correlation coefficient (MCC)"""
         self.trust_opinion.set_parameters(mcc, 1-mcc, 0)
+
+    def set_bonuses(self, negative_bonus: float = 0, positive_bonus: float = 0):
+        self.positive_bonus = positive_bonus
+        self.negative_bonus = negative_bonus
 
     def predict_proba_to_cache(self, samples):
         """
@@ -264,6 +274,7 @@ class EBSL:
         _debug: Enables debugging output
         """
         self.slmodels: list[BSL_SM] = []
+        self._slmodels_dict = {}
         self._reference_opinion = Opinion()
         self.conflict_threshold = conflict_threshold
         self.max_penalty = max_penalty
@@ -296,9 +307,15 @@ class EBSL:
         return "EBSL classifier: conflict_threshold=%g, max_penalty=%g, b=%g, trust_restore_speed=%g, base_rate_choice:\"%s\", nb_of_classifiers = %d" % (self.conflict_threshold, self.max_penalty, self.b, self.trust_restore_speed, self.base_rate_choice_str, len(self.slmodels))
 
     def add_model(self, model: BSL_SM):
+        if model.name in self._slmodels_dict:
+            raise ValueError("The Model with name %s already exists!" % model.name)
         self.slmodels.append(model)
+        self._slmodels_dict[model.name] = model
         # Clear already stored states just in case
         self._state_store.clear()
+
+    def get_model_by_name(self, name: str) -> BSL_SM:
+        return self._slmodels_dict[name]
 
     def _set_all_base_rates(self, base_rate):
         """Set the base rate for all information opinions"""
