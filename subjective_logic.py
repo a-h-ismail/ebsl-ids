@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
+from array import array
 import copy
 from typing import Literal
 import numpy as np
+import pandas as pd
 
 
 class Opinion:
@@ -196,7 +198,7 @@ class BSL_SM:
         self.positive_bonus = 0.
         self.curr_bonus = 0.
         # The prediction cache is maintained here, but the current index is in EBSL
-        self.prediction_cache = ()
+        self.prediction_cache: array
 
     def trust_from_mcc(self, mcc: float):
         """Sets the trust opinion of this model using its Matthews correlation coefficient (MCC)"""
@@ -210,7 +212,7 @@ class BSL_SM:
             samples = samples[self.scaler.get_feature_names_out()]
             samples = self.scaler.transform(samples)
         # Convert to a tuple for the most efficient element by element access in Python
-        self.prediction_cache = tuple(self.model.predict_proba(samples)[:, 1])
+        self.prediction_cache = array('f', self.model.predict_proba(samples)[:, 1])
         self.ncumulative_conflict = self.pcumulative_conflict = 0
 
     def get_prediction(self, index: int) -> float:
@@ -295,6 +297,8 @@ class EBSL:
 
     def add_model(self, model: BSL_SM):
         self.slmodels.append(model)
+        # Clear already stored states just in case
+        self._state_store.clear()
 
     def _set_all_base_rates(self, base_rate):
         """Set the base rate for all information opinions"""
@@ -397,8 +401,8 @@ class EBSL:
     def _reevaluate_trust(self) -> None:
         """Updates the trust for each model according to the conflict"""
         all_conflict = [i.conflict for i in self.slmodels]
-        average_conflict = np.average(all_conflict)
-        distance_to_average_conf = np.subtract(all_conflict, average_conflict)
+        average_conflict = sum(all_conflict)/len(all_conflict)
+        distance_to_average_conf = [i - average_conflict for i in all_conflict]
 
         for i in range(len(distance_to_average_conf)):
             slmodel = self.slmodels[i]
@@ -472,13 +476,14 @@ class EBSL:
 
         return prob
 
-    def _gen_predict_cache(self, samples):
+    def _gen_predict_cache(self, samples: pd.DataFrame):
         """Fills the prediction cache of all models for the current samples"""
-        self._id_list = samples[self._id_col]
+        self._id_list = array('Q', samples[self._id_col].array)
         for model in self.slmodels:
             model.predict_proba_to_cache(samples)
         self._cache_i = 0
         self._cache_max = samples.shape[0]
+        self._state_store.clear()
 
     def _run_once(self) -> float:
         if self._debug:
@@ -518,17 +523,17 @@ class EBSL:
         if self._base_rate_choice == 0:
             self._reference_opinion._u = 0
         nb_rows = X.shape[0]
-        results = np.empty(nb_rows)
+        results = array('f', np.empty(nb_rows, dtype=float))
         for input_row in range(nb_rows):
             self._cache_i = input_row
             class1 = self._run_once()
             results[input_row] = round(class1)
 
-        return results
+        return np.asarray(results)
 
     def _merge_caches(self):
         """Combines all predictions"""
-        predictions: list[tuple] = []
+        predictions: list[array] = []
         for model in self.slmodels:
             predictions.append(model.prediction_cache)
         return np.array(predictions).T
