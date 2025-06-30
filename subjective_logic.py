@@ -108,7 +108,8 @@ class Opinion:
         self._a = source._a
 
     def set_base_rate(self, proba: float) -> None:
-        if proba < 0 or proba > 1:
+        # 1.00...1 adds a tiny margin of error accounting for floats errors
+        if proba < 0 or proba > 1.000001:
             raise ValueError("Base rate should be in range [0;1]")
         else:
             self._a = proba
@@ -208,7 +209,7 @@ class BSL_SM:
 
     def trust_from_mcc(self, mcc: float):
         """Sets the trust opinion of this model using its Matthews correlation coefficient (MCC)"""
-        self.trust_opinion.set_parameters(mcc, 1-mcc, 0)
+        self.trust_opinion.set_parameters(mcc, 0.98-mcc, 0.02)
 
     def set_bonuses(self, negative_bonus: float = 0, positive_bonus: float = 0):
         self.positive_bonus = positive_bonus
