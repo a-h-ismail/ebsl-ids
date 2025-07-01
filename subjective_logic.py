@@ -289,7 +289,7 @@ class EBSL:
         self._last_id = 0
         self.base_rate_choice_str = base_rate_choice
         self._last_final_opinion = Opinion()
-        self._empty_opinion = Opinion()
+        self._empty_opinion = Opinion(0.1, 0.9, 0)
         # Track the classifier state per user
         self._state_store = dict()
         self._id_col = id_col
@@ -399,11 +399,11 @@ class EBSL:
                 print("Model %d: " % (i), end="")
                 print(self.slmodels[i].information_opinion)
 
-            print("\nDiscounted opinions (before update)")
+            print("\nDiscounted opinions (before trust update)")
             for i in range(len(self.slmodels)):
                 print("Model %d: " % (i), end="")
                 print(discounted_opinions[i])
-            print("Reference opinion (before update):",
+            print("Reference opinion (before trust update):",
                   self._reference_opinion, "\n")
 
     def _get_all_conflicts(self) -> None:
@@ -462,7 +462,7 @@ class EBSL:
         if self._debug:
             print("Conflict:", ["{0:0.3f}".format(i) for i in all_conflict])
             print("Average conflict: %g" % average_conflict)
-            print("Distance to average:", distance_to_average_conf)
+            print("Distance to average:", ["{0:0.3f}".format(i) for i in distance_to_average_conf])
             for i in range(len(self.slmodels)):
                 model = self.slmodels[i]
                 cc = model.conflict_count
@@ -484,12 +484,12 @@ class EBSL:
         prob = final_opinion.projected_probability()
 
         if self._debug:
-            print("\nDiscounted opinions (after update)")
+            print("\nDiscounted opinions (after trust update)")
             for i in range(len(self.slmodels)):
                 print("Model %d: " % (i), end="")
                 print(discounted_opinions[i])
-            print("Reference opinion (after update):", self._reference_opinion)
-            print("\nFinal opinion:", final_opinion)
+            print("Reference opinion (after trust update):", self._reference_opinion)
+            print("\n*Final opinion:", final_opinion)
             # Projected probability is made of 2 parts: belief and contribution of prior probability
             print("Base rate contribution: %g" % (final_opinion._a * final_opinion._u))
             print("Probability = %g" % prob)
