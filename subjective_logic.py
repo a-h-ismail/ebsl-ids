@@ -294,6 +294,11 @@ class EBSL:
         self._state_store = dict()
         self._id_col = id_col
 
+        if id_col == "":
+            self._multi_user = False
+        else:
+            self._multi_user = True
+
         if base_rate_choice == "prior":
             self._base_rate_choice = 0
         elif base_rate_choice == "trust":
@@ -489,32 +494,39 @@ class EBSL:
             print("Base rate contribution: %g" % (final_opinion._a * final_opinion._u))
             print("Probability = %g" % prob)
 
-        # UserID awareness
-        self._last_id = self._id_list[self._cache_i]
+        # UserID awareness when needed
+        if self._multi_user:
+            self._last_id = self._id_list[self._cache_i]
 
         return prob
 
     def _gen_predict_cache(self, samples: pd.DataFrame):
         """Fills the prediction cache of all models for the current samples"""
-        self._id_list = array('Q', samples[self._id_col].array)
+        # When in multi user mode, we track the trust penalties and previous final opinion per user
+        if self._multi_user:
+            self._id_list = array('Q', samples[self._id_col].array)
+            self._state_store.clear()
+
         for model in self.slmodels:
             model.predict_proba_to_cache(samples)
         self._cache_i = 0
         self._cache_max = samples.shape[0]
-        self._state_store.clear()
 
     def _run_once(self) -> float:
         if self._debug:
             print("--------------------------------------------")
             print("Iteration", self._cache_i)
 
-        current_id = self._id_list[self._cache_i]
-        if current_id == self._last_id and self._base_rate_choice == 0:
-            # We only need to update the base rate in this case
-            self._set_all_base_rates(self._last_final_opinion.projected_probability())
+        if self._multi_user:
+            current_id = self._id_list[self._cache_i]
+            if current_id == self._last_id and self._base_rate_choice == 0:
+                # We only need to update the base rate in this case
+                self._set_all_base_rates(self._last_final_opinion.projected_probability())
+            else:
+                self._save_state(self._last_id)
+                self._load_state(current_id)
         else:
-            self._save_state(self._last_id)
-            self._load_state(current_id)
+            self._set_all_base_rates(self._last_final_opinion.projected_probability())
 
         # Estimate opinions and their penalized average (assuming all inference is done earlier)
         self._get_all_opinions_and_ref()
