@@ -5,6 +5,7 @@ from typing import Literal
 from uuid import uuid4
 import numpy as np
 import pandas as pd
+from sklearn.metrics import matthews_corrcoef
 
 
 class Opinion:
@@ -195,7 +196,9 @@ class BSL_SM:
         self.conflict = 0.
         self.conflict_count = 0.
         self.pcumulative_conflict = 0
+        self.pconflict_TP = 0
         self.ncumulative_conflict = 0
+        self.nconflict_TN = 0
         self.negative_bonus = 0.
         self.positive_bonus = 0.
         self.curr_bonus = 0.
@@ -290,6 +293,10 @@ class EBSL:
         self.base_rate_choice_str = base_rate_choice
         self._last_final_opinion = Opinion()
         self._empty_opinion = Opinion(0.1, 0.9, 0)
+        # Store true labels to help with tuning
+        self._true_labels: array
+        # The debug switch that enables true labels comparison (so we can know if the model at conflict is right or not)
+        self._compare_to_true_label = False
         # Track the classifier state per user
         self._state_store = dict()
         self._id_col = id_col
@@ -432,12 +439,21 @@ class EBSL:
             if distance_to_average_conf[i] > self.conflict_threshold:
                 slmodel.conflict_count += 1
                 slmodel.trust_penalty = self._get_penalty(slmodel.conflict_count)
+                # The model is predicting positive class, so use the positive bonus
                 if slmodel.information_opinion._b >= 0.5:
                     slmodel.pcumulative_conflict += 1
+                    # Used for bonus tuning (to know which models are worth giving bonuses)
+                    if self._compare_to_true_label and self._true_labels[self._cache_i] == 1:
+                        slmodel.pconflict_TP += 1
+
                     slmodel.trust_penalty -= slmodel.positive_bonus
                     slmodel.curr_bonus = slmodel.positive_bonus
                 else:
                     slmodel.ncumulative_conflict += 1
+                    # Also for bonus tuning
+                    if self._compare_to_true_label and self._true_labels[self._cache_i] == 0:
+                        slmodel.nconflict_TN += 1
+
                     slmodel.trust_penalty -= slmodel.negative_bonus
                     slmodel.curr_bonus = slmodel.negative_bonus
 
@@ -505,7 +521,6 @@ class EBSL:
         # When in multi user mode, we track the trust penalties and previous final opinion per user
         if self._multi_user:
             self._id_list = array('Q', samples[self._id_col].array)
-            self._state_store.clear()
 
         for model in self.slmodels:
             model.predict_proba_to_cache(samples)
@@ -536,7 +551,72 @@ class EBSL:
         self._reevaluate_trust()
         return self._get_final_prediction()
 
-    def predict(self, X) -> np.ndarray:
+    def auto_tune(self, samples, true_labels, bonus_step=0.2, _show_progress=False):
+        """Finds the best model trust bonuses for the given dataset. Sets models trust opinion from their MCC."""
+        self._gen_predict_cache(samples)
+        # Reset bonus for all models and set initial trust from MCC
+        for slmodel in self.slmodels:
+            slmodel.set_bonuses(0, 0)
+            mcc = matthews_corrcoef(true_labels, np.round(slmodel.prediction_cache))
+            slmodel.trust_from_mcc(mcc)
+
+        # Sort models in the internal list according to the trust
+        self.slmodels.sort(key=lambda x: x.trust_opinion._b, reverse=True)
+
+        # Perform a run without bonuses to get a baseline of models behavior under conflict
+        predicted = self.predict(samples, True, true_labels)
+        old_mcc = matthews_corrcoef(true_labels, predicted)
+
+        if _show_progress:
+            print("Baseline MCC (no bonuses): %g" % old_mcc)
+
+        # Traversing models in descending order
+        for model in self.slmodels:
+            p_bonus = n_bonus = old_bonus = 0
+            dist = model.pconflict_TP/model.pcumulative_conflict - 0.5
+
+            while p_bonus < 1 and p_bonus > -1:
+                old_bonus = p_bonus
+                if dist > 0:
+                    p_bonus = min(1, p_bonus+bonus_step)
+                else:
+                    p_bonus = max(-1, p_bonus-bonus_step)
+                model.set_bonuses(0, p_bonus)
+                predicted = self.predict(samples, True, true_labels)
+                new_mcc = matthews_corrcoef(true_labels, predicted)
+                # If our increment/decrement didn't provide improvements, roll it back
+                if new_mcc < old_mcc:
+                    p_bonus = old_bonus
+                    model.set_bonuses(0, old_bonus)
+                    break
+                old_mcc = new_mcc
+
+            if _show_progress:
+                print("Model %s positive bonus = %g, MCC = %g" % (model.name, model.positive_bonus, old_mcc))
+
+            # The same algorithm but for false negatives
+            dist = model.nconflict_TN/model.ncumulative_conflict - 0.5
+
+            while n_bonus < 1 and n_bonus > -1:
+                old_bonus = n_bonus
+                if dist > 0:
+                    n_bonus = min(1, n_bonus+bonus_step)
+                else:
+                    n_bonus = max(-1, n_bonus-bonus_step)
+                model.set_bonuses(n_bonus, p_bonus)
+                predicted = self.predict(samples, True, true_labels)
+                new_mcc = matthews_corrcoef(true_labels, predicted)
+                # If our increment/decrement didn't provide improvements, roll it back
+                if new_mcc < old_mcc:
+                    n_bonus = old_bonus
+                    model.set_bonuses(old_bonus, p_bonus)
+                    break
+                old_mcc = new_mcc
+
+            if _show_progress:
+                print("Model %s negative bonus = %g, MCC = %g" % (model.name, model.negative_bonus, old_mcc))
+
+    def predict(self, X, _keep_caches=False, _true_labels=None) -> np.ndarray:
         """Predict using the ensemble of models added.
 
         Parameters
@@ -548,7 +628,22 @@ class EBSL:
         -------
         y : ndarray, shape (n_samples)
         """
-        self._gen_predict_cache(X)
+        if not _keep_caches or self._cache_i == 0:
+            self._gen_predict_cache(X)
+
+        if _true_labels is not None:
+            self._true_labels = _true_labels
+            self._compare_to_true_label = True
+        else:
+            self._compare_to_true_label = False
+
+        self._cache_i = 0
+        self._state_store.clear()
+        # Clear old conflict statistics
+        for m in self.slmodels:
+            m.pcumulative_conflict = m.pconflict_TP = 0
+            m.ncumulative_conflict = m.nconflict_TN = 0
+
         # Set once here and forget it (in case of prior not trust)
         if self._base_rate_choice == 0:
             self._reference_opinion._u = 0
