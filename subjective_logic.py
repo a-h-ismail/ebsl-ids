@@ -93,10 +93,14 @@ class Opinion:
         return self._b + self._a * self._u
 
     def calculate_conflict(self, reference) -> float:
-        "Calculates conflict of this opinion relative to a reference."
+        "Calculates conflict of this opinion relative to a reference opinion."
         prob_dist = abs(self.projected_probability() - reference.projected_probability())
         conjunctive_conf = (1-reference._u)*(1-self._u)
         return prob_dist * conjunctive_conf
+
+    def calculate_conflict_fast(self, ref_p, ref_u):
+        "Calculates conflict of this opinion relative to a reference opinion. This variant takes precomputed P and u, so it is slightly faster."
+        return abs(self.projected_probability() - ref_p) * (1-ref_u)*(1-self._u)
 
     def __str__(self) -> str:
         return "b = %g, d = %g, u = %g, a = %g" % (self._b, self._d, self._u, self._a)
@@ -292,6 +296,7 @@ class EBSL:
         self._last_id = 0
         self.base_rate_choice_str = base_rate_choice
         self._last_final_opinion = Opinion()
+        self._last_predict_proba = 0.
         self._empty_opinion = Opinion(0.1, 0.9, 0)
         # Store true labels to help with tuning
         self._true_labels: array
@@ -338,12 +343,15 @@ class EBSL:
     def _save_state(self, user_id):
         if user_id in self._state_store:
             # Update the stored state instead of allocating a new one with updated information
-            final_opinion, conflict_counters, bonuses = self._state_store[user_id]
+            state = self._state_store[user_id]
+            state[0] = self._last_predict_proba
+            conflict_counters = state[1]
+            bonuses = state[2]
+            # Store updated bonuses and conflict counters
             for i in range(len(conflict_counters)):
                 conflict_counters[i] = self.slmodels[i].conflict_count
                 bonuses[i] = self.slmodels[i].curr_bonus
 
-            final_opinion.copy(self._last_final_opinion)
         else:
             # Collect current penalized trust opinions and store them separately
             conflict_counters = []
@@ -352,14 +360,16 @@ class EBSL:
                 conflict_counters.append(slmodel.conflict_count)
                 bonuses.append(slmodel.curr_bonus)
 
-            self._state_store[user_id] = (copy.copy(self._last_final_opinion), conflict_counters, bonuses)
+            self._state_store[user_id] = [self._last_predict_proba, conflict_counters, bonuses]
 
     def _load_state(self, user_id):
         if user_id in self._state_store:
-            (final_opinion, conflict_counters, bonuses) = self._state_store[user_id]
-            self._last_final_opinion.copy(final_opinion)
+            state = self._state_store[user_id]
+            self._last_predict_proba = state[0]
+            conflict_counters = state[1]
+            bonuses = state[2]
             # Now set the base rate for all models information opinions (overwriting the old base rate)
-            self._set_all_base_rates(self._last_final_opinion.projected_probability())
+            self._set_all_base_rates(self._last_predict_proba)
             # Restore the conflict counter and corresponding penalized trust
             for i in range(len(conflict_counters)):
                 slm = self.slmodels[i]
@@ -369,10 +379,10 @@ class EBSL:
         else:
             # Use defaults
             for slm in self.slmodels:
+                self._last_predict_proba = 0.49
+                self._set_all_base_rates(self._last_predict_proba)
                 slm.conflict = slm.conflict_count = slm.curr_bonus = 0
                 slm.penalized_trust_opinion.copy(slm.trust_opinion)
-                self._set_all_base_rates(0.49)
-                self._last_final_opinion = self._empty_opinion
 
     def _get_penalty(self, nb_conflict):
         return self.max_penalty*nb_conflict/(nb_conflict + self.b)
@@ -422,11 +432,16 @@ class EBSL:
             self._reference_opinion._d = 1 - a
 
         # If base rate choice is 1, the ref opinion is stored earlier in self
-        # Otherwise it is updated as you see above
+        # Otherwise (prior mode) it is updated as you see in the above lines
         reference = self._reference_opinion
+        if self._base_rate_choice == 1:
+            p = self._last_predict_proba
+        else:
+            p = reference.projected_probability()
+        u = reference._u
 
         for slmodel in self.slmodels:
-            slmodel.conflict = slmodel.information_opinion.calculate_conflict(reference)
+            slmodel.conflict = slmodel.information_opinion.calculate_conflict_fast(p, u)
 
     def _reevaluate_trust(self) -> None:
         """Updates the trust for each model according to the conflict"""
@@ -498,6 +513,7 @@ class EBSL:
         final_opinion.set_base_rate(discounted_opinions[0]._a)
 
         prob = final_opinion.projected_probability()
+        self._last_predict_proba = prob
 
         if self._debug:
             print("\nDiscounted opinions (after trust update)")
@@ -536,12 +552,12 @@ class EBSL:
             current_id = self._id_list[self._cache_i]
             if current_id == self._last_id and self._base_rate_choice == 0:
                 # We only need to update the base rate in this case
-                self._set_all_base_rates(self._last_final_opinion.projected_probability())
+                self._set_all_base_rates(self._last_predict_proba)
             else:
                 self._save_state(self._last_id)
                 self._load_state(current_id)
         else:
-            self._set_all_base_rates(self._last_final_opinion.projected_probability())
+            self._set_all_base_rates(self._last_predict_proba)
 
         # Estimate opinions and their penalized average (assuming all inference is done earlier)
         self._get_all_opinions_and_ref()
