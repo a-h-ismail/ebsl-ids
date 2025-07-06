@@ -22,7 +22,7 @@ class DModel:
 
     def _increment_index(self):
         "Increments the index, automatically rolling over at the sequence end"
-        if self.index == self.max_index:
+        if self.index == self.max_index - 1:
             self.index = 0
         else:
             self.index += 1
