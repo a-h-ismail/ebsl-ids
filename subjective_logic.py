@@ -81,13 +81,13 @@ class Opinion:
             self._d += offset
             return self
         else:
-            penalized_trust = copy.copy(self)
+            modified_trust = copy.copy(self)
             if offset == 0:
-                return penalized_trust
+                return modified_trust
             else:
-                penalized_trust._b -= offset
-                penalized_trust._d += offset
-                return penalized_trust
+                modified_trust._b -= offset
+                modified_trust._d += offset
+                return modified_trust
 
     def projected_probability(self) -> float:
         return self._b + self._a * self._u
@@ -191,7 +191,7 @@ class BSL_SM:
         self.model = model
         self.scaler = scaler
         self.trust_opinion = trust_opinion
-        self.penalized_trust_opinion = copy.copy(trust_opinion)
+        self.modified_trust = copy.copy(trust_opinion)
         self.trust_penalty = 0.
         # The opinion is for class 1
         # Set uncertainty to 0 here so we don't need to keep setting it to 0 everytime we get new information
@@ -203,8 +203,8 @@ class BSL_SM:
         self.pconflict_TP = 0
         self.ncumulative_conflict = 0
         self.nconflict_TN = 0
-        self.negative_bonus = 0.
-        self.positive_bonus = 0.
+        self.nclass_bonus = 0.
+        self.pclass_bonus = 0.
         self.curr_bonus = 0.
         # The prediction cache is maintained here, but the current index is in EBSL
         self.prediction_cache: array
@@ -214,13 +214,14 @@ class BSL_SM:
         else:
             self.name = name
 
-    def trust_from_mcc(self, mcc: float):
+    def trust_from_mcc(self, mcc: float, w=2):
         """Sets the trust opinion of this model using its Matthews correlation coefficient (MCC)"""
-        self.trust_opinion.set_parameters(mcc, 0.98-mcc, 0.02)
+        scale = 100/(100+w)
+        self.trust_opinion.set_parameters(mcc*scale, (1-mcc)*scale, 1-scale)
 
     def set_bonuses(self, negative_bonus: float = 0, positive_bonus: float = 0):
-        self.positive_bonus = positive_bonus
-        self.negative_bonus = negative_bonus
+        self.pclass_bonus = positive_bonus
+        self.nclass_bonus = negative_bonus
 
     def predict_proba_to_cache(self, samples):
         """
@@ -243,14 +244,14 @@ class BSL_SM:
         self.information_opinion._d = 1-p
 
     def get_discounted_information_opinion(self) -> Opinion:
-        """Calculates the discounted opinion according to the trust opinion modified with trust penalty
+        """Calculates the discounted opinion according to the trust opinion modified with trust penalty and bonus
 
-        Warning: This function assumes you already called get_information_opinion() and updated the penalized trust if necessary
+        Warning: This function assumes you already called get_information_opinion() and updated the modified trust if necessary
 
         Returns: A new opinion after trust discounting (original opinion unchanged)
         """
         self.information_opinion.trust_discounting(
-            self.penalized_trust_opinion, out=self.discounted_information_opinion)
+            self.modified_trust, out=self.discounted_information_opinion)
         return self.discounted_information_opinion
 
     def set_prior_probability(self, probability: float):
@@ -353,7 +354,7 @@ class EBSL:
                 bonuses[i] = self.slmodels[i].curr_bonus
 
         else:
-            # Collect current penalized trust opinions and store them separately
+            # Collect current modified trust opinions and store them separately
             conflict_counters = []
             bonuses = []
             for slmodel in self.slmodels:
@@ -370,25 +371,25 @@ class EBSL:
             bonuses = state[2]
             # Now set the base rate for all models information opinions (overwriting the old base rate)
             self._set_all_base_rates(self._last_predict_proba)
-            # Restore the conflict counter and corresponding penalized trust
+            # Restore the conflict counter and corresponding modified trust
             for i in range(len(conflict_counters)):
                 slm = self.slmodels[i]
                 slm.curr_bonus = bonuses[i]
                 slm.conflict = self._get_penalty(conflict_counters[i])-bonuses[i]
-                slm.trust_opinion.modify_trust(slm.conflict, out=slm.penalized_trust_opinion)
+                slm.trust_opinion.modify_trust(slm.conflict, out=slm.modified_trust)
         else:
             # Use defaults
             for slm in self.slmodels:
                 self._last_predict_proba = 0.49
                 self._set_all_base_rates(self._last_predict_proba)
                 slm.conflict = slm.conflict_count = slm.curr_bonus = 0
-                slm.penalized_trust_opinion.copy(slm.trust_opinion)
+                slm.modified_trust.copy(slm.trust_opinion)
 
     def _get_penalty(self, nb_conflict):
         return self.max_penalty*nb_conflict/(nb_conflict + self.b)
 
     def _get_all_opinions_and_ref(self):
-        "Gets all original model opinions (by inference) then calculates the reference opinion (penalized)"
+        "Gets all original model opinions (by inference) then calculates the reference opinion if necessary"
         discounted_opinions: list[Opinion] = []
         for slmodel in self.slmodels:
             # Get the information opinion
@@ -397,12 +398,12 @@ class EBSL:
         # Case where the base rate strategy was: highest trust
         # Find model with the current highest trust and use its belief as the base rate
         if self._base_rate_choice == 1:
-            all_trust = [i.penalized_trust_opinion for i in self.slmodels]
+            all_trust = [i.modified_trust for i in self.slmodels]
             highest_trust_index = find_max_belief(all_trust)
             self._set_all_base_rates(self.slmodels[highest_trust_index].information_opinion._b)
 
         for slmodel in self.slmodels:
-            # Calculate the information opinion after discounting with penalized trust
+            # Calculate the information opinion after discounting with modified trust
             discounted_opinion = slmodel.get_discounted_information_opinion()
             discounted_opinions.append(discounted_opinion)
 
@@ -461,19 +462,19 @@ class EBSL:
                     if self._compare_to_true_label and self._true_labels[self._cache_i] == 1:
                         slmodel.pconflict_TP += 1
 
-                    slmodel.trust_penalty -= slmodel.positive_bonus
-                    slmodel.curr_bonus = slmodel.positive_bonus
+                    slmodel.trust_penalty -= slmodel.pclass_bonus
+                    slmodel.curr_bonus = slmodel.pclass_bonus
                 else:
                     slmodel.ncumulative_conflict += 1
                     # Also for bonus tuning
                     if self._compare_to_true_label and self._true_labels[self._cache_i] == 0:
                         slmodel.nconflict_TN += 1
 
-                    slmodel.trust_penalty -= slmodel.negative_bonus
-                    slmodel.curr_bonus = slmodel.negative_bonus
+                    slmodel.trust_penalty -= slmodel.nclass_bonus
+                    slmodel.curr_bonus = slmodel.nclass_bonus
 
-                # Recalculate the penalized trust opinion immediately (to avoid always recalculating all trust opinions later)
-                slmodel.trust_opinion.modify_trust(slmodel.trust_penalty, out=slmodel.penalized_trust_opinion)
+                # Recalculate the modified trust opinion immediately (to avoid always recalculating all trust opinions later)
+                slmodel.trust_opinion.modify_trust(slmodel.trust_penalty, out=slmodel.modified_trust)
                 # And the new discounted information opinion
                 slmodel.get_discounted_information_opinion()
 
@@ -487,7 +488,7 @@ class EBSL:
                     slmodel.trust_penalty = self._get_penalty(slmodel.conflict_count) - slmodel.curr_bonus
 
                 # Same optimization as above
-                slmodel.trust_opinion.modify_trust(slmodel.trust_penalty, out=slmodel.penalized_trust_opinion)
+                slmodel.trust_opinion.modify_trust(slmodel.trust_penalty, out=slmodel.modified_trust)
                 slmodel.get_discounted_information_opinion()
 
         if self._debug:
@@ -559,9 +560,9 @@ class EBSL:
         else:
             self._set_all_base_rates(self._last_predict_proba)
 
-        # Estimate opinions and their penalized average (assuming all inference is done earlier)
+        # Estimate opinions and their modified average (assuming all inference is done earlier)
         self._get_all_opinions_and_ref()
-        # Find conflict between undiscounted opinions and penalized average
+        # Find conflict between undiscounted opinions and modified average
         self._get_all_conflicts()
         # Based on conflicts, find new trust values
         self._reevaluate_trust()
@@ -589,48 +590,50 @@ class EBSL:
         # Traversing models in descending order
         for model in self.slmodels:
             p_bonus = n_bonus = old_bonus = 0
-            dist = model.pconflict_TP/model.pcumulative_conflict - 0.5
 
-            while p_bonus < 1 and p_bonus > -1:
-                old_bonus = p_bonus
-                if dist > 0:
-                    p_bonus = min(1, p_bonus+bonus_step)
-                else:
-                    p_bonus = max(-1, p_bonus-bonus_step)
-                model.set_bonuses(0, p_bonus)
-                predicted = self.predict(samples, True, true_labels)
-                new_mcc = matthews_corrcoef(true_labels, predicted)
-                # If our increment/decrement didn't provide improvements, roll it back
-                if new_mcc < old_mcc:
-                    p_bonus = old_bonus
-                    model.set_bonuses(0, old_bonus)
-                    break
-                old_mcc = new_mcc
+            if model.pcumulative_conflict > 0:
+                dist = model.pconflict_TP/model.pcumulative_conflict - 0.5
+                while p_bonus < 1 and p_bonus > -1:
+                    old_bonus = p_bonus
+                    if dist > 0:
+                        p_bonus = min(1, p_bonus+bonus_step)
+                    else:
+                        p_bonus = max(-1, p_bonus-bonus_step)
+                    model.set_bonuses(0, p_bonus)
+                    predicted = self.predict(samples, True, true_labels)
+                    new_mcc = matthews_corrcoef(true_labels, predicted)
+                    # If our increment/decrement didn't provide improvements, roll it back
+                    if new_mcc < old_mcc:
+                        p_bonus = old_bonus
+                        model.set_bonuses(0, old_bonus)
+                        break
+                    old_mcc = new_mcc
 
-            if _show_progress:
-                print("Model %s positive bonus = %g, MCC = %g" % (model.name, model.positive_bonus, old_mcc))
+                if _show_progress:
+                    print("Model %s positive bonus = %g, MCC = %g" % (model.name, model.pclass_bonus, old_mcc))
 
             # The same algorithm but for false negatives
-            dist = model.nconflict_TN/model.ncumulative_conflict - 0.5
+            if model.ncumulative_conflict > 0:
+                dist = model.nconflict_TN/model.ncumulative_conflict - 0.5
 
-            while n_bonus < 1 and n_bonus > -1:
-                old_bonus = n_bonus
-                if dist > 0:
-                    n_bonus = min(1, n_bonus+bonus_step)
-                else:
-                    n_bonus = max(-1, n_bonus-bonus_step)
-                model.set_bonuses(n_bonus, p_bonus)
-                predicted = self.predict(samples, True, true_labels)
-                new_mcc = matthews_corrcoef(true_labels, predicted)
-                # If our increment/decrement didn't provide improvements, roll it back
-                if new_mcc < old_mcc:
-                    n_bonus = old_bonus
-                    model.set_bonuses(old_bonus, p_bonus)
-                    break
-                old_mcc = new_mcc
+                while n_bonus < 1 and n_bonus > -1:
+                    old_bonus = n_bonus
+                    if dist > 0:
+                        n_bonus = min(1, n_bonus+bonus_step)
+                    else:
+                        n_bonus = max(-1, n_bonus-bonus_step)
+                    model.set_bonuses(n_bonus, p_bonus)
+                    predicted = self.predict(samples, True, true_labels)
+                    new_mcc = matthews_corrcoef(true_labels, predicted)
+                    # If our increment/decrement didn't provide improvements, roll it back
+                    if new_mcc < old_mcc:
+                        n_bonus = old_bonus
+                        model.set_bonuses(old_bonus, p_bonus)
+                        break
+                    old_mcc = new_mcc
 
-            if _show_progress:
-                print("Model %s negative bonus = %g, MCC = %g" % (model.name, model.negative_bonus, old_mcc))
+                if _show_progress:
+                    print("Model %s negative bonus = %g, MCC = %g" % (model.name, model.nclass_bonus, old_mcc))
 
     def predict(self, X, _keep_caches=False, _true_labels=None) -> np.ndarray:
         """Predict using the ensemble of models added.
