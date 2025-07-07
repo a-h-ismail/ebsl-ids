@@ -175,7 +175,7 @@ def find_max_belief(all_opinions: list | tuple):
 class BSL_SM:
     "BSL_SM: Binomial Subjective Logic - Single Model"
 
-    def __init__(self, model, scaler, name="", trust_opinion=Opinion()) -> None:
+    def __init__(self, model, scaler, trust_opinion=None, name="") -> None:
         """
         Creates the building blocks required for Ensemble Binomial Subjective Logic.
         It encapsulates an ML model, its scaler and manages subjective logic opinions (information, trust)
@@ -187,11 +187,17 @@ class BSL_SM:
         scaler: Should provide the transform() method like sklearn
 
         trust_opinion: Indicates the trustworthiness of a model. Affects the contribution of each model to the final prediction.
+
+        name: The model name. If none is provided, a random one is generated
         """
         self.model = model
         self.scaler = scaler
-        self.trust_opinion = trust_opinion
-        self.modified_trust = copy.copy(trust_opinion)
+        if trust_opinion is not None:
+            self.trust_opinion = trust_opinion
+        else:
+            self.trust_opinion = Opinion()
+
+        self.modified_trust = copy.copy(self.trust_opinion)
         self.trust_penalty = 0.
         # The opinion is for class 1
         # Set uncertainty to 0 here so we don't need to keep setting it to 0 everytime we get new information
