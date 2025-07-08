@@ -339,6 +339,15 @@ class EBSL:
         # Clear already stored states just in case
         self._state_store.clear()
 
+    def trust_from_dataset_mcc(self, samples: pd.DataFrame, true_labels) -> None:
+        """Set the trust of all Models in the ensemble from the MCC metrics of the provided dataset
+        Note: This function fills the prediction cache for all models."""
+        self._gen_prediction_cache(samples)
+        true_labels = np.asarray(true_labels)
+        for model in self.slmodels:
+            mcc = matthews_corrcoef(true_labels, np.round(model.prediction_cache))
+            model.trust_from_mcc(mcc)
+
     def get_model_by_name(self, name: str) -> BSL_SM:
         return self._slmodels_dict[name]
 
@@ -539,7 +548,7 @@ class EBSL:
 
         return prob
 
-    def _gen_predict_cache(self, samples: pd.DataFrame):
+    def _gen_prediction_cache(self, samples: pd.DataFrame):
         """Fills the prediction cache of all models for the current samples"""
         # When in multi user mode, we track the trust penalties and previous final opinion per user
         if self._multi_user:
@@ -576,12 +585,10 @@ class EBSL:
 
     def auto_tune(self, samples, true_labels, bonus_step=0.2, _show_progress=False):
         """Finds the best model trust bonuses for the given dataset. Sets models trust opinion from their MCC."""
-        self._gen_predict_cache(samples)
+        self.trust_from_dataset_mcc(samples, true_labels)
         # Reset bonus for all models and set initial trust from MCC
         for slmodel in self.slmodels:
             slmodel.set_bonuses(0, 0)
-            mcc = matthews_corrcoef(true_labels, np.round(slmodel.prediction_cache))
-            slmodel.trust_from_mcc(mcc)
 
         # Sort models in the internal list according to the trust
         self.slmodels.sort(key=lambda x: x.trust_opinion._b, reverse=True)
@@ -654,7 +661,7 @@ class EBSL:
         y : ndarray, shape (n_samples)
         """
         if not _keep_caches or self._cache_i == 0:
-            self._gen_predict_cache(X)
+            self._gen_prediction_cache(X)
 
         if _true_labels is not None:
             self._true_labels = _true_labels
