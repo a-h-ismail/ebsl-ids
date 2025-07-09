@@ -225,9 +225,9 @@ class BSL_SM:
         scale = 100/(100+w)
         self.trust_opinion.set_parameters(mcc*scale, (1-mcc)*scale, 1-scale)
 
-    def set_bonuses(self, negative_bonus: float = 0, positive_bonus: float = 0):
-        self.pclass_bonus = positive_bonus
-        self.nclass_bonus = negative_bonus
+    def set_bonuses(self, nclass_bonus: float = 0, pclass_bonus: float = 0):
+        self.pclass_bonus = pclass_bonus
+        self.nclass_bonus = nclass_bonus
 
     def predict_proba_to_cache(self, samples):
         """
@@ -470,7 +470,7 @@ class EBSL:
             if distance_to_average_conf[i] > self.conflict_threshold:
                 slmodel.conflict_count += 1
                 slmodel.trust_penalty = self._get_penalty(slmodel.conflict_count)
-                # The model is predicting positive class, so use the positive bonus
+                # The model is predicting positive class, so use the pclass bonus
                 if slmodel.information_opinion._b >= 0.5:
                     slmodel.pcumulative_conflict += 1
                     # Used for bonus tuning (to know which models are worth giving bonuses)
@@ -567,6 +567,8 @@ class EBSL:
         if self._multi_user:
             current_id = self._id_list[self._cache_i]
             if current_id == self._last_id and self._base_rate_choice == 0:
+                # The user ID didn't change from the last iteration
+                # And our base rate source is the last prediction probability
                 # We only need to update the base rate in this case
                 self._set_all_base_rates(self._last_predict_proba)
             else:
@@ -604,6 +606,7 @@ class EBSL:
         for model in self.slmodels:
             p_bonus = n_bonus = old_bonus = 0
 
+            # Loop to find the best positive class bonus
             if model.pcumulative_conflict > 0:
                 dist = model.pconflict_TP/model.pcumulative_conflict - 0.5
                 while p_bonus < 1 and p_bonus > -1:
@@ -623,9 +626,9 @@ class EBSL:
                     old_mcc = new_mcc
 
                 if _show_progress:
-                    print("Model %s positive bonus = %g, MCC = %g" % (model.name, model.pclass_bonus, old_mcc))
+                    print("Model %s received pclass bonus = %g, MCC = %g" % (model.name, model.pclass_bonus, old_mcc))
 
-            # The same algorithm but for false negatives
+            # The same algorithm but for the negative class bonus
             if model.ncumulative_conflict > 0:
                 dist = model.nconflict_TN/model.ncumulative_conflict - 0.5
 
@@ -646,7 +649,7 @@ class EBSL:
                     old_mcc = new_mcc
 
                 if _show_progress:
-                    print("Model %s negative bonus = %g, MCC = %g" % (model.name, model.nclass_bonus, old_mcc))
+                    print("Model %s received nclass bonus = %g, MCC = %g" % (model.name, model.nclass_bonus, old_mcc))
 
     def predict(self, X, _keep_caches=False, _true_labels=None) -> np.ndarray:
         """Predict using the ensemble of models added.
