@@ -103,7 +103,7 @@ class Opinion:
         return abs(self.projected_probability() - ref_p) * (1-ref_u)*(1-self._u)
 
     def __str__(self) -> str:
-        return "b = %g, d = %g, u = %g, a = %g" % (self._b, self._d, self._u, self._a)
+        return "b = %.3g, d = %.3g, u = %.3g, a = %.3g" % (self._b, self._d, self._u, self._a)
 
     def copy(self, source):
         """Copies source into this object inplace"""
@@ -250,14 +250,14 @@ class BSL_SM:
         self.information_opinion._d = 1-p
 
     def get_discounted_information_opinion(self) -> Opinion:
-        """Calculates the discounted opinion according to the trust opinion modified with trust penalty and bonus
+        """Calculates the discounted opinion according to the trust opinion modified with trust penalty and bonus.
+        This function will update the internal state of the class too
 
         Warning: This function assumes you already called get_information_opinion() and updated the modified trust if necessary
 
         Returns: A new opinion after trust discounting (original opinion unchanged)
         """
-        self.information_opinion.trust_discounting(
-            self.modified_trust, out=self.discounted_information_opinion)
+        self.information_opinion.trust_discounting(self.modified_trust, out=self.discounted_information_opinion)
         return self.discounted_information_opinion
 
     def set_prior_probability(self, probability: float):
@@ -427,17 +427,16 @@ class EBSL:
             average_fusion(discounted_opinions, out=self._reference_opinion)
 
         if self._debug:
-            print("Original information opinion")
-            for i in range(len(self.slmodels)):
-                print("Model %d: " % (i), end="")
-                print(self.slmodels[i].information_opinion)
+            print("* Initialization")
+            print("Information opinions:")
+            for slmodel in self.slmodels:
+                print("Model %s:" % slmodel.name, slmodel.information_opinion)
 
-            print("\nDiscounted opinions (before trust update)")
-            for i in range(len(self.slmodels)):
-                print("Model %d: " % (i), end="")
-                print(discounted_opinions[i])
-            print("Reference opinion (before trust update):",
-                  self._reference_opinion, "\n")
+            print("\n* Before trust update")
+            print("Discounted information opinions:")
+            for slmodel in self.slmodels:
+                print("Model %s:" % slmodel.name, slmodel.discounted_information_opinion)
+            print("Reference opinion:", self._reference_opinion, "\n")
 
     def _get_all_conflicts(self) -> None:
         """Calculate conflict relative to the reference opinion. Results are stored in each model object"""
@@ -507,15 +506,21 @@ class EBSL:
                 slmodel.get_discounted_information_opinion()
 
         if self._debug:
+            print("* Conflict statistics")
             print("Conflict:", ["{0:0.3f}".format(i) for i in all_conflict])
-            print("Average conflict: %g" % average_conflict)
+            print("Average conflict = %.3g" % average_conflict)
             print("Distance to average:", ["{0:0.3f}".format(i) for i in distance_to_average_conf])
-            for i in range(len(self.slmodels)):
-                model = self.slmodels[i]
+            for model in self.slmodels:
+                name = model.name
                 cc = model.conflict_count
                 penalty = model.trust_penalty
                 bonus = model.curr_bonus
-                print("Model %d: Conflict count = %g, penalty = %g, bonus = %g" % (i, cc, penalty, bonus))
+                print("Model %s: Conflict count = %g, curr_penalty = %.3g, bonus = %.3g" % (name, cc, penalty, bonus))
+
+            print("\n* After trust update")
+            print("Discounted information opinions:")
+            for slmodel in self.slmodels:
+                print("Model %s:" % slmodel.name, slmodel.discounted_information_opinion)
 
     def _get_final_prediction(self) -> float:
         "Calculates the final prediction using discounted information opinion. Updates the base rate for all model opinions"
@@ -532,15 +537,10 @@ class EBSL:
         self._last_predict_proba = prob
 
         if self._debug:
-            print("\nDiscounted opinions (after trust update)")
-            for i in range(len(self.slmodels)):
-                print("Model %d: " % (i), end="")
-                print(discounted_opinions[i])
-            print("Reference opinion (after trust update):", self._reference_opinion)
-            print("\n*Final opinion:", final_opinion)
+            print("\n* Final opinion:", final_opinion)
             # Projected probability is made of 2 parts: belief and contribution of prior probability
-            print("Base rate contribution: %g" % (final_opinion._a * final_opinion._u))
-            print("Probability = %g" % prob)
+            print("Base rate contribution = %.3g" % (final_opinion._a * final_opinion._u))
+            print("Class 1 Probability = %.3g" % prob)
 
         # UserID awareness when needed
         if self._multi_user:
