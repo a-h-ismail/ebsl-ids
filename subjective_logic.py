@@ -651,7 +651,7 @@ class EBSL:
                 if _show_progress:
                     print("Model %s received nclass bonus = %g, MCC = %g" % (model.name, model.nclass_bonus, old_mcc))
 
-    def predict(self, X, _keep_caches=False, _true_labels=None) -> np.ndarray:
+    def _predict_proba(self, X, _keep_caches=False, _true_labels=None) -> np.ndarray:
         """Predict using the ensemble of models added.
 
         Parameters
@@ -687,9 +687,23 @@ class EBSL:
         for input_row in range(nb_rows):
             self._cache_i = input_row
             class1 = self._run_once()
-            results[input_row] = round(class1)
+            results[input_row] = class1
 
         return np.asarray(results)
+
+    def predict(self, X, _keep_caches=False, _true_labels=None):
+        """Predict using the ensemble of models added.
+
+        Parameters
+        ----------
+        X : Dataframe of shape (n_samples, n_features)
+            The input data.
+
+        Returns
+        -------
+        y : ndarray, shape (n_samples)
+        """
+        return self._predict_proba(X, _keep_caches, _true_labels).round()
 
     def _merge_caches(self):
         """Combines all predictions"""
@@ -706,9 +720,12 @@ class EBSL:
         pred = np.where(sum_votes > threshold, 1, 0)
         return pred
 
-    def _soft_vote(self):
+    def _soft_vote_prob(self):
         caches = self._merge_caches()
         sum_votes = np.sum(caches, axis=1)
-        threshold = caches.shape[1]/2
-        pred = np.where(sum_votes > threshold, 1, 0)
-        return pred
+        prob = np.divide(sum_votes, len(self.slmodels))
+        return prob
+
+    def _soft_vote(self):
+        prob = self._soft_vote_prob()
+        return np.round(prob)
