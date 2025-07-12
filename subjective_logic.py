@@ -537,6 +537,28 @@ class EBSL:
         self._last_predict_proba = prob
 
         if self._debug:
+            print("\n* Effective weights:")
+            all_opinions = [m.discounted_information_opinion for m in self.slmodels]
+            if self._base_rate_choice == 1:
+                most_trusted = find_max_belief(all_opinions)
+            else:
+                most_trusted = -1
+
+            denominator = 0
+            for i in range(len(self.slmodels)):
+                denominator += _uncertainty_product(all_opinions, i)
+            # Now process each model alone
+            for i in range(len(self.slmodels)):
+                m = self.slmodels[i]
+                weight = m.modified_trust._b*_uncertainty_product(all_opinions, i)/denominator
+                if i == most_trusted:
+                    weight += final_opinion._u
+                print("Model %s: %.3g" % (m.name, weight))
+
+            # Case of prior mode, the previous opinion has its weight
+            if self._base_rate_choice == 0:
+                print("Previous prediction: %.3g" % final_opinion._u)
+
             print("\n* Final opinion:", final_opinion)
             # Projected probability is made of 2 parts: belief and contribution of prior probability
             print("Base rate contribution = %.3g" % (final_opinion._a * final_opinion._u))
