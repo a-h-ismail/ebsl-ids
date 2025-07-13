@@ -540,7 +540,8 @@ class EBSL:
             print("\n* Effective weights:")
             all_opinions = [m.discounted_information_opinion for m in self.slmodels]
             if self._base_rate_choice == 1:
-                most_trusted = find_max_belief(all_opinions)
+                all_trust_opinions = [m.modified_trust for m in self.slmodels]
+                most_trusted = find_max_belief(all_trust_opinions)
             else:
                 most_trusted = -1
 
