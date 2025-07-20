@@ -597,7 +597,7 @@ class EBSL:
             else:
                 self._save_state(self._last_id)
                 self._load_state(current_id)
-        else:
+        elif self._base_rate_choice == 0:
             self._set_all_base_rates(self._last_predict_proba)
 
         # Estimate opinions and their modified average (assuming all inference is done earlier)
