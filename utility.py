@@ -21,7 +21,7 @@ def get_metrics(expected, prediction):
     print()
 
 
-def from_csv(filename, label_name: str, fields_to_drop: tuple | list):
+def from_csv(filename, label_name: str, fields_to_drop: tuple | list | str):
     """Reads the dataset from CSV file, then splits the labels from the data, 
     drops the specified fields and replaces missing values with the mean of column"""
     actual_data = pd.read_csv(filename)
