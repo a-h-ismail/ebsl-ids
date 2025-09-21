@@ -284,7 +284,7 @@ class EBSL:
         base_rate_choice: How to choose the base rate. "prior" uses the last aggregated prediction probability.
         "trust" uses the probability produced by the currently most trusted model
 
-        id_col: Name of the column containing the "user" identifier. Necessary to track trust for each user separately
+        id_col: Name of the column containing the flow identifier. Necessary to track trust for each flow separately
 
         _debug: Enables debugging output
         """
@@ -299,7 +299,7 @@ class EBSL:
         # Used in debug output iteration indicator and for predictions in bulk
         self._cache_i = 0
         self._cache_max = 0
-        # User ID in the previous iteration
+        # Flow ID in the previous iteration
         self._last_id = 0
         self.base_rate_choice_str = base_rate_choice
         self._last_final_opinion = Opinion()
@@ -309,14 +309,14 @@ class EBSL:
         self._true_labels: array
         # The debug switch that enables true labels comparison (so we can know if the model at conflict is right or not)
         self._compare_to_true_label = False
-        # Track the classifier state per user
+        # Track the classifier state per flow
         self._state_store = dict()
         self._id_col = id_col
 
         if id_col == "":
-            self._multi_user = False
+            self._multi_flow = False
         else:
-            self._multi_user = True
+            self._multi_flow = True
 
         if base_rate_choice == "prior":
             self._base_rate_choice = 0
@@ -356,10 +356,10 @@ class EBSL:
         for slmodel in self.slmodels:
             slmodel.information_opinion.set_base_rate(base_rate)
 
-    def _save_state(self, user_id):
-        if user_id in self._state_store:
+    def _save_state(self, flow_id):
+        if flow_id in self._state_store:
             # Update the stored state instead of allocating a new one with updated information
-            state = self._state_store[user_id]
+            state = self._state_store[flow_id]
             state[0] = self._last_predict_proba
             conflict_counters = state[1]
             bonuses = state[2]
@@ -376,11 +376,11 @@ class EBSL:
                 conflict_counters.append(slmodel.conflict_count)
                 bonuses.append(slmodel.curr_bonus)
 
-            self._state_store[user_id] = [self._last_predict_proba, conflict_counters, bonuses]
+            self._state_store[flow_id] = [self._last_predict_proba, conflict_counters, bonuses]
 
-    def _load_state(self, user_id):
-        if user_id in self._state_store:
-            state = self._state_store[user_id]
+    def _load_state(self, flow_id):
+        if flow_id in self._state_store:
+            state = self._state_store[flow_id]
             self._last_predict_proba = state[0]
             conflict_counters = state[1]
             bonuses = state[2]
@@ -565,16 +565,16 @@ class EBSL:
             print("Base rate contribution = %.3g" % (final_opinion._a * final_opinion._u))
             print("Class 1 Probability = %.3g" % prob)
 
-        # UserID awareness when needed
-        if self._multi_user:
+        # Flow ID awareness when needed
+        if self._multi_flow:
             self._last_id = self._id_list[self._cache_i]
 
         return prob
 
     def _gen_prediction_cache(self, samples: pd.DataFrame):
         """Fills the prediction cache of all models for the current samples"""
-        # When in multi user mode, we track the trust penalties and previous final opinion per user
-        if self._multi_user:
+        # When in multi flow mode, we track the trust penalties and previous final opinion per flow
+        if self._multi_flow:
             self._id_list = array('Q', samples[self._id_col].array)
 
         for model in self.slmodels:
@@ -587,10 +587,10 @@ class EBSL:
             print("--------------------------------------------")
             print("Iteration", self._cache_i)
 
-        if self._multi_user:
+        if self._multi_flow:
             current_id = self._id_list[self._cache_i]
             if current_id == self._last_id and self._base_rate_choice == 0:
-                # The user ID didn't change from the last iteration
+                # The flow ID didn't change from the last iteration
                 # And our base rate source is the last prediction probability
                 # We only need to update the base rate in this case
                 self._set_all_base_rates(self._last_predict_proba)
