@@ -522,6 +522,11 @@ class EBSL:
             for slmodel in self.slmodels:
                 print("Model %s:" % slmodel.name, slmodel.discounted_information_opinion)
 
+            # Store dist to average conflict and penalties
+            for i in range(len(self.slmodels)):
+                self._slm_dist_to_avg[i].append(distance_to_average_conf[i])  # type: ignore
+                self._slm_penalties[i].append(self.slmodels[i].trust_penalty)  # type: ignore
+
     def _get_final_prediction(self) -> float:
         "Calculates the final prediction using discounted information opinion. Updates the base rate for all model opinions"
         discounted_opinions: list[Opinion] = []
@@ -555,10 +560,12 @@ class EBSL:
                 if i == most_trusted:
                     weight += final_opinion._u
                 print("Model %s: %.3g" % (m.name, weight))
+                self._slm_weights[i].append(weight)
 
             # Case of prior mode, the previous opinion has its weight
             if self._base_rate_choice == 0:
                 print("Previous prediction: %.3g" % final_opinion._u)
+                self._slm_weights[len(self.slmodels)].append(final_opinion._u)
 
             print("\n* Final opinion:", final_opinion)
             # Projected probability is made of 2 parts: belief and contribution of prior probability
@@ -694,6 +701,16 @@ class EBSL:
             self._compare_to_true_label = True
         else:
             self._compare_to_true_label = False
+
+        if self._debug:
+            count = len(self.slmodels)+int(self._debug)
+            # If debugging, we want to store the distance to average conflicts, penalties and weights
+            self._slm_dist_to_avg = [array('f', []) for _ in range(count)]
+            self._slm_weights = [array('f', []) for _ in range(count)]
+            self._slm_penalties = [array('f', []) for _ in range(count)]
+        else:
+            # Otherwise flush older runs
+            self._slm_dist_to_avg = self._slm_weights = self._slm_penalties = []
 
         self._cache_i = 0
         self._state_store.clear()
