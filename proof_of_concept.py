@@ -50,7 +50,7 @@ x = np.linspace(0, nb_samples-1, nb_samples)
 fig, axs = plt.subplots(2, 2, figsize=(15, 15))
 fig.canvas.manager.set_window_title('EBSL Debug Statistics')  # type: ignore
 
-axs[0, 0].set_title("Individual Model Probabilities")
+axs[0, 0].set_title("Individual Model Class 1 Probabilities")
 axs[0, 1].set_title("Distance to Average Conflict")
 axs[1, 0].set_title("Weights")
 axs[1, 1].set_title("Predicted Label (or Class 1 Probability)")
