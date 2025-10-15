@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import pandas as pd
-import subjective_logic as sl
+import ebsl as sl
 import dummy_model as dm
 import numpy as np
 from matplotlib import pyplot as plt
