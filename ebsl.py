@@ -72,7 +72,8 @@ class BSL_SM:
     def trust_from_mcc(self, mcc: float, w=2):
         """Sets the trust opinion of this model using its Matthews correlation coefficient (MCC)"""
         scale = 100/(100+w)
-        self.trust_opinion.set_parameters(mcc*scale, (1-mcc)*scale, 1-scale)
+        self.trust_opinion.set_parameters(mcc*scale, (1-mcc)*scale, 1-scale, 0)
+        self.modified_trust = copy.copy(self.trust_opinion)
 
     def set_bonuses(self, nclass_bonus: float = 0, pclass_bonus: float = 0):
         self.pclass_bonus = pclass_bonus
@@ -371,10 +372,11 @@ class EBSL:
             for slmodel in self.slmodels:
                 print("Model %s:" % slmodel.name, slmodel.discounted_information_opinion)
 
-            # Store dist to average conflict and penalties
+            # Store dist to average conflict, penalties and uncertainty
             for i in range(len(self.slmodels)):
-                self._slm_dist_to_avg[i].append(distance_to_average_conf[i])  # type: ignore
-                self._slm_penalties[i].append(self.slmodels[i].trust_penalty)  # type: ignore
+                self._slm_dist_to_avg[i].append(distance_to_average_conf[i])
+                self._slm_penalties[i].append(self.slmodels[i].trust_penalty)
+                self._slm_uncertainty[i].append(self.slmodels[i].discounted_information_opinion._u)
 
     def _get_final_prediction(self) -> float:
         "Calculates the final prediction using discounted information opinion. Updates the base rate for all model opinions"
@@ -420,6 +422,8 @@ class EBSL:
             # Projected probability is made of 2 parts: belief and contribution of prior probability
             print("Base rate contribution = %.3g" % (final_opinion._a * final_opinion._u))
             print("Class 1 Probability = %.3g" % prob)
+
+            self._slm_uncertainty[len(self.slmodels)].append(final_opinion._u)
 
         # Flow ID awareness when needed
         if self._multi_flow:
@@ -531,7 +535,7 @@ class EBSL:
                     print("Model %s received nclass bonus = %g, MCC = %g" % (model.name, model.nclass_bonus, old_mcc))
 
     def _predict_proba(self, X, _keep_caches=False, _true_labels=None) -> np.ndarray:
-        """Predict using the ensemble of models added.
+        """Predict using the ensemble of models
 
         Parameters
         ----------
@@ -557,6 +561,7 @@ class EBSL:
             self._slm_dist_to_avg = [array('f', []) for _ in range(count)]
             self._slm_weights = [array('f', []) for _ in range(count)]
             self._slm_penalties = [array('f', []) for _ in range(count)]
+            self._slm_uncertainty = [array('f', []) for _ in range(count+1)]
         else:
             # Otherwise flush older runs
             self._slm_dist_to_avg = self._slm_weights = self._slm_penalties = []
