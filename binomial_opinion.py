@@ -62,8 +62,10 @@ class Opinion:
         if offset > self._b:
             offset = self._b
         elif offset < -self._d:
-            # If d becomes 0, u in discounted opinions may become zero, causing problems
-            offset = -self._d + 0.05
+            offset = -self._d
+            # If d and u becomes 0, u in discounted opinions may become zero, causing problems
+            if self._u == 0:
+                offset += 0.05
 
         if out is not None:
             out._b = self._b - offset
