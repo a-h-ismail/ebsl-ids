@@ -145,6 +145,7 @@ class EBSL:
         self.max_penalty = max_penalty
         self.b = b
         self.trust_restore_speed = trust_restore_speed
+        self._base_weights: array
         self._debug = _debug
         # Used in debug output iteration indicator and for predictions in bulk
         self._cache_i = 0
@@ -205,6 +206,34 @@ class EBSL:
         """Set the base rate for all information opinions"""
         for slmodel in self.slmodels:
             slmodel.information_opinion.set_base_rate(base_rate)
+
+    def init_base_weights(self):
+        all_trust_opinions = [m.trust_opinion for m in self.slmodels]
+        model_count = len(self.slmodels)
+
+        self._base_weights = array('f')
+        # Find the common denominator
+        denominator = 0
+        for i in range(model_count):
+            tmp = 1
+            for j in range(model_count):
+                if j == i:
+                    continue
+                else:
+                    tmp *= 1-self.slmodels[j].trust_opinion._b
+            denominator += tmp
+
+        for i in range(model_count):
+            numerator = self.slmodels[i].trust_opinion._b
+            for j in range(model_count):
+                if i == j:
+                    continue
+                else:
+                    numerator *= (1-self.slmodels[j].trust_opinion._b)
+            self._base_weights.append(numerator/denominator)
+
+        # Take the weight of uncertainty into account
+        self._base_weights.append(1-sum(self._base_weights))
 
     def _save_state(self, flow_id):
         if flow_id in self._state_store:
@@ -317,6 +346,7 @@ class EBSL:
         for i in range(len(distance_to_average_conf)):
             slmodel = self.slmodels[i]
             if distance_to_average_conf[i] > self.conflict_threshold:
+                # Applying penalty
                 slmodel.conflict_count += 1
                 slmodel.trust_penalty = self._get_penalty(slmodel.conflict_count)
                 # The model is predicting positive class, so use the pclass bonus
@@ -343,6 +373,7 @@ class EBSL:
                 slmodel.get_discounted_information_opinion()
 
             elif slmodel.conflict_count != 0:
+                # Gradually restoring trust
                 slmodel.conflict_count -= min(self.trust_restore_speed, slmodel.conflict_count)
 
                 if slmodel.conflict_count == 0:
@@ -387,7 +418,7 @@ class EBSL:
         final_opinion = self._last_final_opinion
         average_fusion(discounted_opinions, out=final_opinion)
         # The base rate should be the same everywhere, so set it to the final opinion (or it will stay 0)
-        final_opinion.set_base_rate(discounted_opinions[0]._a)
+        final_opinion._a = discounted_opinions[0]._a
 
         prob = final_opinion.projected_probability()
         self._last_predict_proba = prob
@@ -605,10 +636,10 @@ class EBSL:
         if self._debug:
             count = len(self.slmodels)+int(self._debug)
             # If debugging, we want to store the distance to average conflicts, penalties and weights
-            self._slm_dist_to_avg = [array('f', []) for _ in range(count)]
-            self._slm_weights = [array('f', []) for _ in range(count)]
-            self._slm_penalties = [array('f', []) for _ in range(count)]
-            self._slm_uncertainty = [array('f', []) for _ in range(count+1)]
+            self._slm_dist_to_avg = [array('f') for _ in range(count)]
+            self._slm_weights = [array('f') for _ in range(count)]
+            self._slm_penalties = [array('f') for _ in range(count)]
+            self._slm_uncertainty = [array('f') for _ in range(count+1)]
         else:
             # Otherwise flush older runs
             self._slm_dist_to_avg = self._slm_weights = self._slm_penalties = []
