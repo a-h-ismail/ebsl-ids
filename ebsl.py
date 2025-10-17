@@ -468,15 +468,31 @@ class EBSL:
         self._reevaluate_trust()
         return self._get_final_prediction()
 
-    def auto_tune(self, samples, true_labels, bonus_step=0.2, _show_progress=False):
-        """Finds the best model trust bonuses for the given dataset. Sets models trust opinion from their MCC."""
+    def auto_tune(self, samples, true_labels, bonus_step=0.2, reverse=True, over_stepping=False, _show_progress=False):
+        """
+        Finds good trust bonuses for the given dataset. Sets models trust opinion from their MCC.
+
+        Parameters
+        ----------
+        samples: Dataset sample points
+
+        true_labels: The true labels corresponding to samples, should be binary.
+
+        bonus_step: Determines the step size while modifying bonuses.
+
+        over_stepping: If True, the function keeps trying with higher bonus steps, may provide better bonuses with longer runtime.
+
+        Note
+        ----
+        The absolute value of bonuses is capped by the maximum penalty.
+        """
         self.trust_from_dataset_mcc(samples, true_labels)
         # Reset bonus for all models and set initial trust from MCC
         for slmodel in self.slmodels:
             slmodel.set_bonuses(0, 0)
 
         # Sort models in the internal list according to the trust
-        self.slmodels.sort(key=lambda x: x.trust_opinion._b, reverse=True)
+        self.slmodels.sort(key=lambda x: x.trust_opinion._b, reverse=reverse)
 
         # Perform a run without bonuses to get a baseline of models behavior under conflict
         predicted = self.predict(samples, True, true_labels)
@@ -485,51 +501,82 @@ class EBSL:
         if _show_progress:
             print("Baseline MCC (no bonuses): %g" % old_mcc)
 
+        max_bonus = self.max_penalty
+
         # Traversing models in descending order
         for model in self.slmodels:
-            p_bonus = n_bonus = old_bonus = 0
 
             # Loop to find the best positive class bonus
             if model.pcumulative_conflict > 0:
-                dist = model.pconflict_TP/model.pcumulative_conflict - 0.5
-                while p_bonus < 1 and p_bonus > -1:
-                    old_bonus = p_bonus
+                old_bonus = 0
+                max_reached = False
+                curr_step = bonus_step
+                # Increase/decrease the bonus while monitoring MCC
+                while True:
+                    dist = model.pconflict_TP/model.pcumulative_conflict - 0.5
+
                     if dist > 0:
-                        p_bonus = min(1, p_bonus+bonus_step)
+                        model.pclass_bonus = min(max_bonus, old_bonus+curr_step)
                     else:
-                        p_bonus = max(-1, p_bonus-bonus_step)
-                    model.set_bonuses(0, p_bonus)
+                        model.pclass_bonus = max(-max_bonus, old_bonus-curr_step)
+
+                    if abs(model.pclass_bonus) == max_bonus:
+                        max_reached = True
+
                     predicted = self.predict(samples, True, true_labels)
                     new_mcc = matthews_corrcoef(true_labels, predicted)
                     # If our increment/decrement didn't provide improvements, roll it back
                     if new_mcc < old_mcc:
-                        p_bonus = old_bonus
-                        model.set_bonuses(0, old_bonus)
+                        model.pclass_bonus = old_bonus
+                        if over_stepping:
+                            curr_step *= 2
+                        else:
+                            break
+                    else:
+                        old_bonus = model.pclass_bonus
+                        old_mcc = new_mcc
+
+                    # Needed the flag to be set earlier to prevent flapping between two bonus values in case new_mcc < old_mcc
+                    if max_reached:
                         break
-                    old_mcc = new_mcc
 
                 if _show_progress:
                     print("Model %s received pclass bonus = %g, MCC = %g" % (model.name, model.pclass_bonus, old_mcc))
 
             # The same algorithm but for the negative class bonus
             if model.ncumulative_conflict > 0:
-                dist = model.nconflict_TN/model.ncumulative_conflict - 0.5
+                old_bonus = 0
+                max_reached = False
+                curr_step = bonus_step
+                # Increase/decrease the bonus while monitoring MCC
+                while True:
+                    dist = model.nconflict_TN/model.ncumulative_conflict - 0.5
 
-                while n_bonus < 1 and n_bonus > -1:
-                    old_bonus = n_bonus
                     if dist > 0:
-                        n_bonus = min(1, n_bonus+bonus_step)
+                        model.nclass_bonus = min(max_bonus, old_bonus+curr_step)
                     else:
-                        n_bonus = max(-1, n_bonus-bonus_step)
-                    model.set_bonuses(n_bonus, p_bonus)
+                        model.nclass_bonus = max(-max_bonus, old_bonus-curr_step)
+
+                    if abs(model.nclass_bonus) == max_bonus:
+                        max_reached = True
+
+                    model.nclass_bonus = model.nclass_bonus
                     predicted = self.predict(samples, True, true_labels)
                     new_mcc = matthews_corrcoef(true_labels, predicted)
                     # If our increment/decrement didn't provide improvements, roll it back
                     if new_mcc < old_mcc:
-                        n_bonus = old_bonus
-                        model.set_bonuses(old_bonus, p_bonus)
+                        model.nclass_bonus = old_bonus
+                        if over_stepping:
+                            curr_step *= 2
+                        else:
+                            break
+                    else:
+                        old_bonus = model.nclass_bonus
+                        old_mcc = new_mcc
+
+                    # Needed the flag to be set earlier to prevent flapping between two bonus values in case new_mcc < old_mcc
+                    if max_reached:
                         break
-                    old_mcc = new_mcc
 
                 if _show_progress:
                     print("Model %s received nclass bonus = %g, MCC = %g" % (model.name, model.nclass_bonus, old_mcc))
