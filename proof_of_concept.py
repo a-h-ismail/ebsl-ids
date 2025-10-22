@@ -14,28 +14,28 @@ print("Test Subjective logic ensemble learning: EBSL")
 true_label = (0, 0, 0, 1, 1, 1, 1, 1)
 
 # Modify probabilities to observe behavior
-m1 = dm.DModel((0.1, 0.1, 0.15, 0.77, 0.8, 0.69, 0.76, 0.81))
-m2 = dm.DModel((0.05, 0.1, 0.2, 0.1, 0.3, 0.33, 0.81, 0.29))
-m3 = dm.DModel((0.2, 0.1, 0.1, 0.22, 0.26, 0.4, 0.37, 0.5))
+m1 = dm.DModel((0.1, 0.15, 0.12, 0.2, 0.15, 0.77, 0.8, 0.69, 0.76, 0.81))
+m2 = dm.DModel((0.05, 0.1, 0.07, 0.23, 0.2, 0.1, 0.3, 0.33, 0.41, 0.29))
+m3 = dm.DModel((0.2, 0.1, 0.11, 0.14, 0.1, 0.22, 0.26, 0.4, 0.37, 0.5))
 
 
 # Create a new ensemble classifier and set the models
 eclassifier = sl.EBSL(_debug=True, base_rate_choice="prior", trust_restore_speed=0.5,
-                      conflict_threshold=0.2, max_penalty=0.7)
+                      conflict_threshold=0.15, max_penalty=0.5, b=5)
 
 eclassifier.add_model(sl.BSL_SM(m1, None, None, "1"))
 eclassifier.add_model(sl.BSL_SM(m2, None, None, "2"))
 eclassifier.add_model(sl.BSL_SM(m3, None, None, "3"))
 
-eclassifier.get_model_by_name("1").trust_from_mcc(0.93)
-eclassifier.get_model_by_name("2").trust_from_mcc(0.91)
-eclassifier.get_model_by_name("3").trust_from_mcc(0.87)
+eclassifier.get_model_by_name("1").trust_from_mcc(0.8)
+eclassifier.get_model_by_name("2").trust_from_mcc(0.75)
+eclassifier.get_model_by_name("3").trust_from_mcc(0.72)
 
 # Comment/uncomment the next line to see the bonus effect on the first model
-# eclassifier.get_model_by_name("1").set_bonuses(0, 0.7)
+# eclassifier.get_model_by_name("1").set_bonuses(0, 0.2)
 
 # As we are using dummy models, it doesn't need real samples, an empty array will do the trick
-predicted = eclassifier._predict_proba(pd.DataFrame(np.empty((8, 1))))
+predicted = eclassifier._predict_proba(pd.DataFrame(np.empty((10, 1))))
 print(eclassifier)
 print(predicted)
 print("EBSL:", predicted.round())
@@ -47,7 +47,7 @@ nb_samples = len(m1.probability_seq)
 x = np.linspace(0, nb_samples-1, nb_samples)
 
 # Create figure and axis objects with 2 rows and 2 columns
-fig, axs = plt.subplots(2, 3, figsize=(15, 15))
+fig, axs = plt.subplots(2, 3, figsize=(15, 10))
 fig.canvas.manager.set_window_title('EBSL Debug Statistics')  # type: ignore
 
 axs[0, 0].set_title("Individual Model Class 1 Probabilities")
