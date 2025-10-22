@@ -499,7 +499,7 @@ class EBSL:
         self._reevaluate_trust()
         return self._get_final_prediction()
 
-    def auto_tune(self, samples, true_labels, bonus_step=0.2, reverse=True, over_stepping=False, _show_progress=False):
+    def auto_tune(self, samples, true_labels, bonus_step=0.2, descending_order=True, over_stepping=False, _show_progress=False):
         """
         Finds good trust bonuses for the given dataset. Sets models trust opinion from their MCC.
 
@@ -510,6 +510,8 @@ class EBSL:
         true_labels: The true labels corresponding to samples, should be binary.
 
         bonus_step: Determines the step size while modifying bonuses.
+
+        descending_order: When set to True, models are processed in the order of decreasing MCC
 
         over_stepping: If True, the function keeps trying with higher bonus steps, may provide better bonuses with longer runtime.
 
@@ -523,7 +525,7 @@ class EBSL:
             slmodel.set_bonuses(0, 0)
 
         # Sort models in the internal list according to the trust
-        self.slmodels.sort(key=lambda x: x.trust_opinion._b, reverse=reverse)
+        self.slmodels.sort(key=lambda x: x.trust_opinion._b, reverse=descending_order)
 
         # Perform a run without bonuses to get a baseline of models behavior under conflict
         predicted = self.predict(samples, True, true_labels)
