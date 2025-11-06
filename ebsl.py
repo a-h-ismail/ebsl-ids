@@ -530,6 +530,9 @@ class EBSL:
         ----
         The absolute value of bonuses is capped by the maximum penalty.
         """
+        if bonus_step < 0.05:
+            raise ValueError("Bonus value %g is too small, it should be greater than 0.05")
+
         self.trust_from_dataset_mcc(samples, true_labels)
         # Reset bonus for all models and set initial trust from MCC
         for slmodel in self.slmodels:
@@ -549,16 +552,17 @@ class EBSL:
 
         # Traversing models in descending order
         for model in self.slmodels:
-
+            if _show_progress:
+                print("Tuning bonuses of model \"%s\" started:" % model.name)
             # Loop to find the best positive class bonus
             if model.pcumulative_conflict > 0:
                 old_bonus = 0
                 max_reached = False
                 curr_step = bonus_step
                 # Increase/decrease the bonus while monitoring MCC
+                cicr_0 = model.pconflict_TP/model.pcumulative_conflict
+                dist = cicr_0 - 0.5
                 while True:
-                    dist = model.pconflict_TP/model.pcumulative_conflict - 0.5
-
                     if dist > 0:
                         model.pclass_bonus = min(max_bonus, old_bonus+curr_step)
                     else:
@@ -585,7 +589,7 @@ class EBSL:
                         break
 
                 if _show_progress:
-                    print("Model %s received pclass bonus = %g, MCC = %g" % (model.name, model.pclass_bonus, old_mcc))
+                    print("Class 1 bonus = %g, CICR = %g, MCC = %g" % (model.pclass_bonus, cicr_0 , old_mcc))
 
             # The same algorithm but for the negative class bonus
             if model.ncumulative_conflict > 0:
@@ -593,9 +597,9 @@ class EBSL:
                 max_reached = False
                 curr_step = bonus_step
                 # Increase/decrease the bonus while monitoring MCC
+                cicr_1 = model.nconflict_TN/model.ncumulative_conflict
+                dist = cicr_1 - 0.5
                 while True:
-                    dist = model.nconflict_TN/model.ncumulative_conflict - 0.5
-
                     if dist > 0:
                         model.nclass_bonus = min(max_bonus, old_bonus+curr_step)
                     else:
@@ -623,7 +627,7 @@ class EBSL:
                         break
 
                 if _show_progress:
-                    print("Model %s received nclass bonus = %g, MCC = %g" % (model.name, model.nclass_bonus, old_mcc))
+                    print("Class 0 bonus = %g, CICR = %g, MCC = %g" % (model.nclass_bonus, cicr_1 , old_mcc))
 
     def _predict_proba(self, X, _keep_caches=False, _true_labels=None) -> np.ndarray:
         """Predict using the ensemble of models
