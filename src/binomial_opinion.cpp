@@ -24,12 +24,12 @@ int valid_proba(float value)
     return value_between(value, 0, 1);
 }
 
-void Opinion::set_parameters(float b, float d, float u, float a)
+void Opinion::set_parameters(float belief, float disbelief, float uncertainty, float base_rate)
 {
-    Opinion::b = b;
-    Opinion::d = d;
-    Opinion::u = u;
-    Opinion::a = a;
+    b = belief;
+    d = disbelief;
+    u = uncertainty;
+    a = base_rate;
     validate_opinion();
 }
 
@@ -49,14 +49,14 @@ Opinion::Opinion(float belief, float disbelief, float uncertainty, float base_ra
 std::string Opinion::to_string()
 {
     char tmp[100];
-    sprintf(tmp,"belief = %g, disbelief = %g, uncertainty = %g, base rate = %g", b, d, u, a);
+    sprintf(tmp, "b = %g, d = %g, u = %g, a = %g", b, d, u, a);
     return std::string(tmp);
 }
 
 // The binomial opinion class
 void Opinion::print_opinion()
 {
-    printf("belief = %g, disbelief = %g, uncertainty = %g, base rate = %g", b, d, u, a);
+    printf("b = %g, d = %g, u = %g, a = %g", b, d, u, a);
 }
 
 int Opinion::validate_opinion()
@@ -123,7 +123,7 @@ void Opinion::trust_discounting(Opinion &trust, Opinion &out)
     out.a = a;
 }
 
-void modify_trust(Opinion &trust, float offset, Opinion &out)
+void modify_trust(Opinion trust, float offset, Opinion &out)
 {
     // -d <= offset <= b
     // Reminder: b + d + u = 1 and b,d >= 0
@@ -160,25 +160,4 @@ int validate_opinions(Opinion *all_opinions, int count)
             return 1;
 
     return 0;
-}
-
-NB_MODULE(binomial_opinion, m)
-{
-    m.def("average_fusion", &average_fusion);
-    m.def("modify_trust", &modify_trust);
-    m.def("uncertainty_product", &uncertainty_product);
-    nb::class_<Opinion>(m, "Opinion")
-        .def(nb::init<>())
-        .def(nb::init<float,float,float,float>(), "b"_a, "d"_a, "u"_a,"a"_a=1)
-        .def("__str__",&Opinion::to_string)
-        .def("validate_opinions", &Opinion::validate_opinion)
-        .def("set_parameters", &Opinion::set_parameters,"b"_a, "d"_a, "u"_a,"a"_a=1)
-        .def("calculate_conflict", &Opinion::calculate_conflict,"reference"_a)
-        .def("trust_discounting", &Opinion::trust_discounting,"trust"_a,"out"_a)
-        .def("projected_probability", &Opinion::projected_probability)
-        .def("print_opinion", &Opinion::print_opinion)
-        .def_rw("b", &Opinion::b)
-        .def_rw("d", &Opinion::d)
-        .def_rw("u", &Opinion::u)
-        .def_rw("a", &Opinion::a);
 }

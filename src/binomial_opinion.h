@@ -6,6 +6,7 @@
 class Opinion
 {
     friend class EBSL;
+
 public:
     float b, d, u, a;
 
@@ -33,7 +34,7 @@ int validate_opinions(Opinion *all_opinions, int count);
 
 Opinion average_fusion(std::vector<Opinion> &all_opinions);
 
-void modify_trust(Opinion &trust, float offset, Opinion &out);
+void modify_trust(Opinion trust, float offset, Opinion &out);
 
 // Helper function for belief fusion product of uncertainty with a single exception
 float uncertainty_product(std::vector<Opinion> &all_opinions, int exception_index);
