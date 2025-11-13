@@ -20,12 +20,12 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE nanobind_ROOT)
 find_package(nanobind CONFIG REQUIRED)
 
-nanobind_add_module(binomial_opinion src/binomial_opinion.cpp)
+nanobind_add_module(ebsl_cpp src/ebsl.cpp src/binomial_opinion.cpp src/bsl_sm.cpp)
 
 nanobind_add_stub(
-  binomial_opinion_stub
-  MODULE binomial_opinion
-  OUTPUT binomial_opinion.pyi
-  PYTHON_PATH $<TARGET_FILE_DIR:binomial_opinion>
-  DEPENDS binomial_opinion
-)
+ebsl_cpp_stub
+MODULE ebsl_cpp
+OUTPUT ebsl_cpp.pyi
+PYTHON_PATH $<TARGET_FILE_DIR:ebsl_cpp>
+DEPENDS ebsl_cpp)
+
