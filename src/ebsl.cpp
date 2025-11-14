@@ -1,6 +1,7 @@
 #include "binomial_opinion.h"
 #include "bsl_sm.h"
 #include "ebsl.h"
+#include <format>
 
 void EBSL::fill_discounted_information_opinions()
 {
@@ -55,14 +56,22 @@ std::string EBSL::to_string()
 
 void EBSL::add_model(BSL_SM *model)
 {
-    // if model->name in _slmodels_dict:
-    //     raise ValueError("The Model with name %s already exists!" % model->name)
-    slmodels.push_back(model);
-    //_slmodels_dict[model->name] = model
-    // Clear already stored states just in case
-    state_store.clear();
-    nb_models = slmodels.size();
-    all_discounted_opinions.resize(nb_models);
+    try
+    {
+        slmodels_map.at(model->name);
+        // If the code continued here, the model already exists. Raise an exception
+        throw std::runtime_error(std::format("The model with name {} already exists!", model->name));
+    }
+    catch (const std::out_of_range &e)
+    {
+        // As it should be, the name doesn't exist so add this model
+        slmodels.push_back(model);
+        slmodels_map[model->name] = model;
+        // Clear already stored states just in case
+        state_store.clear();
+        nb_models = slmodels.size();
+        all_discounted_opinions.resize(nb_models);
+    }
 }
 
 // Returns the index of the highest belief in modified trust opinions
@@ -483,7 +492,8 @@ NB_MODULE(ebsl_cpp, m)
         .def_rw("b", &EBSL::b)
         .def_rw("id_list", &EBSL::id_list)
         .def_rw("true_labels", &EBSL::true_labels)
-        .def_rw("slmodels", &EBSL::slmodels)
+        .def_rw("slmodels_cpp", &EBSL::slmodels)
+        .def_rw("slmodels_dict", &EBSL::slmodels_map)
         .def_rw("slm_dist_to_avg", &EBSL::slm_dist_to_avg)
         .def_rw("slm_uncertainty", &EBSL::slm_uncertainty)
         .def_rw("slm_penalties", &EBSL::slm_penalties)

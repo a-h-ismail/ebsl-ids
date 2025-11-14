@@ -8,6 +8,7 @@
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/unordered_map.h>
 #include <cstdio>
 enum
 {
@@ -58,6 +59,7 @@ private:
 
 public:
     std::vector<BSL_SM *> slmodels;
+    std::unordered_map<std::string, BSL_SM *> slmodels_map;
     float conflict_threshold, max_penalty, b, trust_restore_speed;
     bool enable_debugging, compare_to_true_labels;
     int base_rate_choice;
