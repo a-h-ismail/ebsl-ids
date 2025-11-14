@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import matthews_corrcoef
 
-from ebsl_cpp import Opinion, BSL_SM_cpp, EBSL_cpp
+from ebsl_cpp import *
 
 
 class BSL_SM:
@@ -154,28 +154,36 @@ class EBSL:
 
         _debug: Enables debugging output
         """
-        self.pyslmodels: list[BSL_SM] = []
+        self.base_rate_choice: str
+        self.slmodels: list[BSL_SM] = []
         if base_rate_choice == "prior":
             base_rate_choice_val = 0
         elif base_rate_choice == "trust":
             base_rate_choice_val = 1
-        self._id_col = id_col
 
+        self.base_rate_choice = base_rate_choice
+        self._id_col = id_col
         self.ebsl_cpp = EBSL_cpp(conflict_threshold, max_penalty, b, trust_restore_speed, base_rate_choice_val)
         self.ebsl_cpp.enable_debugging = _debug
+        self._slmodels_dict = {}
 
     def __str__(self) -> str:
         return self.ebsl_cpp.__str__()
 
+    def get_model_by_name(self, name: str):
+        return self._slmodels_dict[name]
+
     def add_model(self, model: BSL_SM):
-        # if model.name in self._slmodels_dict:
-        #    raise ValueError("The Model with name %s already exists!" % model.name)
-        self.pyslmodels.append(model)
-        self.ebsl_cpp.add_model(model.bsl_cpp)
+        if model.name in self._slmodels_dict:
+           raise RuntimeError("The Model with name %s already exists!" % model.name)
+        else:
+            self.slmodels.append(model)
+            self.ebsl_cpp.add_model(model.bsl_cpp)
+            self._slmodels_dict[model.name] = model
 
     def _gen_prediction_cache(self, samples: pd.DataFrame):
         """Fills the prediction cache of all models for the current samples"""
-        for model in self.pyslmodels:
+        for model in self.slmodels:
             model.predict_proba_to_cache(samples)
 
     def trust_from_dataset_mcc(self, samples: pd.DataFrame, true_labels) -> None:
@@ -183,7 +191,7 @@ class EBSL:
         Note: This function fills the prediction cache for all models."""
         self._gen_prediction_cache(samples)
         true_labels = np.asarray(true_labels)
-        for model in self.pyslmodels:
+        for model in self.slmodels:
             # pyright: ignore[reportCallIssue, reportArgumentType]
             mcc = matthews_corrcoef(true_labels, np.round(model.prediction_cache))
             model.trust_from_mcc(mcc)
@@ -213,11 +221,11 @@ class EBSL:
 
         self.trust_from_dataset_mcc(samples, true_labels)
         # Reset bonus for all models and set initial trust from MCC
-        for slmodel in self.pyslmodels:
+        for slmodel in self.slmodels:
             slmodel.set_bonuses(0, 0)
 
         # Sort models in the internal list according to the trust
-        self.pyslmodels.sort(key=lambda x: x.bsl_cpp.trust.b, reverse=descending_order)
+        self.slmodels.sort(key=lambda x: x.bsl_cpp.trust.b, reverse=descending_order)
 
         # Perform a run without bonuses to get a baseline of models behavior under conflict
         predicted = self.predict(samples, False, true_labels)
@@ -229,7 +237,7 @@ class EBSL:
         max_bonus = self.ebsl_cpp.max_penalty
 
         # Traversing models in descending order
-        for model in self.pyslmodels:
+        for model in self.slmodels:
             if _show_progress:
                 print("Tuning bonuses of model \"%s\" started:" % model.bsl_cpp.name)
             # Loop to find the best positive class bonus
@@ -361,10 +369,30 @@ class EBSL:
         """
         return self.predict_proba(X, _keep_caches, _true_labels).round()
 
+    @property
+    def slm_dist_to_avg(self):
+        return self.ebsl_cpp.slm_dist_to_avg
+
+    @property
+    def slm_weights(self):
+        return self.ebsl_cpp.slm_weights
+
+    @property
+    def slm_uncertainty(self):
+        return self.ebsl_cpp.slm_uncertainty
+
+    @property
+    def slm_penalties(self):
+        return self.ebsl_cpp.slm_penalties
+
+    @property
+    def conflict_threshold(self):
+        return self.ebsl_cpp.conflict_threshold
+
     def _merge_caches(self):
         """Combines all predictions"""
         predictions = []
-        for model in self.pyslmodels:
+        for model in self.slmodels:
             predictions.append(model.prediction_cache)
         return np.array(predictions).T
 
@@ -379,7 +407,7 @@ class EBSL:
     def _soft_vote_prob(self):
         caches = self._merge_caches()
         sum_votes = np.sum(caches, axis=1)
-        prob = np.divide(sum_votes, len(self.pyslmodels))
+        prob = np.divide(sum_votes, len(self.slmodels))
         return prob
 
     def _soft_vote(self):
