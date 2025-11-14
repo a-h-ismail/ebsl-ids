@@ -32,8 +32,8 @@ void BSL_SM::trust_from_mcc(float mcc, int w)
 
 void BSL_SM::set_bonuses(float class0_bonus, float class1_bonus)
 {
-    pclass_bonus = class0_bonus;
-    nclass_bonus = class1_bonus;
+    nclass_bonus = class0_bonus;
+    pclass_bonus = class1_bonus;
 }
 
 float BSL_SM::get_prediction(int index)
