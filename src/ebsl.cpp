@@ -2,12 +2,16 @@
 #include "bsl_sm.h"
 #include "ebsl.h"
 
+void EBSL::fill_discounted_information_opinions()
+{
+    for (int i = 0; i < nb_models; ++i)
+        all_discounted_opinions[i] = slmodels[i]->discounted_information;
+}
+
 EBSL::EBSL(float conflict_threshold, float max_penalty, float b, float trust_restore_speed, int base_rate_choice)
 {
     enable_debugging = false;
     multi_flow = false;
-    all_discounted_opinions.reserve(9);
-    all_conflicts.reserve(9);
     EBSL::conflict_threshold = conflict_threshold;
     EBSL::max_penalty = max_penalty;
     EBSL::b = b;
@@ -45,7 +49,7 @@ std::string EBSL::to_string()
         base_rate_choice_str = "UNKNOWN!!";
     }
     sprintf(tmp, "EBSL classifier: conflict_threshold=%g, max_penalty=%g, b=%g, trust_restore_speed=%g, base_rate_choice:\"%s\", nb_of_classifiers = %d",
-            conflict_threshold, max_penalty, b, trust_restore_speed, base_rate_choice_str, (int)slmodels.size());
+            conflict_threshold, max_penalty, b, trust_restore_speed, base_rate_choice_str, (int)nb_models);
     return std::string(tmp);
 }
 
@@ -57,13 +61,15 @@ void EBSL::add_model(BSL_SM *model)
     //_slmodels_dict[model->name] = model
     // Clear already stored states just in case
     state_store.clear();
+    nb_models = slmodels.size();
+    all_discounted_opinions.resize(nb_models);
 }
 
 // Returns the index of the highest belief in modified trust opinions
 int EBSL::find_most_trusted()
 {
     int max = -1, max_index = -1;
-    for (int i = 0; i < slmodels.size(); ++i)
+    for (int i = 0; i < nb_models; ++i)
         if (max < slmodels[i]->modified_trust.b)
         {
             max_index = i;
@@ -76,7 +82,7 @@ int EBSL::find_most_trusted()
 void EBSL::set_all_base_rates(float base_rate)
 {
     // Set the base rate for all original information opinions
-    for (int i = 0; i < slmodels.size(); ++i)
+    for (int i = 0; i < nb_models; ++i)
         slmodels[i]->information.a = base_rate;
 }
 
@@ -89,7 +95,7 @@ void EBSL::save_state(int64_t flow_id)
         state_entry.last_prediction_proba = last_prediction;
 
         // Store updated bonuses and conflict counters
-        for (int i = 0; i < slmodels.size(); ++i)
+        for (int i = 0; i < nb_models; ++i)
         {
             state_entry.conflict_counters[i] = slmodels[i]->conflict_counter;
             state_entry.bonuses[i] = slmodels[i]->curr_bonus;
@@ -103,7 +109,7 @@ void EBSL::save_state(int64_t flow_id)
         sl_state_snapshot new_entry;
         new_entry.last_prediction_proba = last_prediction;
         // Store bonuses and conflict counters
-        for (int i = 0; i < slmodels.size(); ++i)
+        for (int i = 0; i < nb_models; ++i)
         {
             new_entry.conflict_counters.push_back(slmodels[i]->conflict_counter);
             new_entry.bonuses.push_back(slmodels[i]->curr_bonus);
@@ -122,7 +128,7 @@ void EBSL::load_state(int64_t flow_id)
         last_prediction = state_entry.last_prediction_proba;
 
         // Load updated bonuses and conflict counters and recalculate the modified trust
-        for (int i = 0; i < slmodels.size(); ++i)
+        for (int i = 0; i < nb_models; ++i)
         {
             slmodels[i]->conflict_counter = state_entry.conflict_counters[i];
             slmodels[i]->curr_bonus = state_entry.bonuses[i];
@@ -199,9 +205,7 @@ void EBSL::get_ref_and_conflicts()
     else if (base_rate_choice == TRUST_SOURCE)
     {
         // Calculate the average of discounted opinions
-        all_discounted_opinions.clear();
-        for (BSL_SM *model : slmodels)
-            all_discounted_opinions.push_back(model->discounted_information);
+        fill_discounted_information_opinions();
         reference = average_fusion(all_discounted_opinions);
     }
 
@@ -223,7 +227,7 @@ void EBSL::reevaluate_trust()
     float total_conflict = 0, average_conflict;
     for (BSL_SM *model : slmodels)
         total_conflict += model->conflict;
-    average_conflict = total_conflict / slmodels.size();
+    average_conflict = total_conflict / nb_models;
 
     for (BSL_SM *slmodel : slmodels)
     {
@@ -306,7 +310,7 @@ void EBSL::reevaluate_trust()
         }
 
         // Store dist to average conflict, penalties and uncertainty
-        for (int i = 0; i < slmodels.size(); ++i)
+        for (int i = 0; i < nb_models; ++i)
         {
             slm_dist_to_avg[i].push_back(slmodels[i]->conflict - average_conflict);
             slm_penalties[i].push_back(slmodels[i]->trust_offset);
@@ -318,9 +322,7 @@ void EBSL::reevaluate_trust()
 // Calculates the final prediction using discounted information opinion
 float EBSL::get_final_prediction()
 {
-    all_discounted_opinions.clear();
-    for (BSL_SM *slmodel : slmodels)
-        all_discounted_opinions.push_back(slmodel->discounted_information);
+    fill_discounted_information_opinions();
 
     last_final_opinion = average_fusion(all_discounted_opinions);
     // The base rate should be the same everywhere, so set it to the final opinion (or it will stay 0)
@@ -338,11 +340,11 @@ float EBSL::get_final_prediction()
             most_trusted = -1;
 
         float denominator = 0;
-        for (int i = 0; i < slmodels.size(); ++i)
+        for (int i = 0; i < nb_models; ++i)
             denominator += uncertainty_product(all_discounted_opinions, i);
 
         // Now calculate the weight of each model
-        for (int i = 0; i < slmodels.size(); ++i)
+        for (int i = 0; i < nb_models; ++i)
         {
             float weight = slmodels[i]->modified_trust.b * uncertainty_product(all_discounted_opinions, i) / denominator;
             if (i == most_trusted)
@@ -354,7 +356,7 @@ float EBSL::get_final_prediction()
         // Case of prior mode, the previous opinion has its weight
         if (base_rate_choice == PRIOR_SOURCE)
             printf("Previous prediction: %.3g\n", last_final_opinion.u);
-        slm_weights[slmodels.size()].push_back(last_final_opinion.u);
+        slm_weights[nb_models].push_back(last_final_opinion.u);
 
         printf("\n* Final opinion:");
         last_final_opinion.print_opinion();
@@ -362,7 +364,7 @@ float EBSL::get_final_prediction()
         printf("\nBase rate contribution = %.3g\n", last_final_opinion.a * last_final_opinion.u);
         printf("Class 1 Probability = %.3g\n", last_prediction);
 
-        slm_uncertainty[slmodels.size()].push_back(last_final_opinion.u);
+        slm_uncertainty[nb_models].push_back(last_final_opinion.u);
     }
 
     // Flow ID awareness when needed
@@ -430,7 +432,7 @@ void EBSL::predict_proba()
 
     if (enable_debugging)
     {
-        int count = slmodels.size();
+        int count = nb_models;
         std::vector<float> tmp;
         // If debugging, we want to store the distance to average conflicts, penalties and weights
         for (int i = 0; i < count; ++i)
@@ -469,54 +471,9 @@ void EBSL::predict_proba()
     }
 }
 
-int ebsl_tp_traverse(PyObject *self, visitproc visit, void *arg)
-{
-// On Python 3.9+, we must traverse the implicit dependency
-// of an object on its associated type object.
-#if PY_VERSION_HEX >= 0x03090000
-    Py_VISIT(Py_TYPE(self));
-#endif
-
-    // The tp_traverse method may be called after __new__ but before or during
-    // __init__, before the C++ constructor has been completed. We must not
-    // inspect the C++ state if the constructor has not yet completed.
-    if (!nb::inst_ready(self))
-    {
-        return 0;
-    }
-
-    // Get the C++ object associated with 'self' (this always succeeds)
-    EBSL *w = nb::inst_ptr<EBSL>(self);
-
-    // If w->value has an associated Python object, return it.
-    // If not, value.ptr() will equal NULL, which is also fine.
-    // We need to inform the python garbage collector that we have numpy arrays here
-    Py_VISIT(nb::find(w->id_list).ptr());
-    Py_VISIT(nb::find(w->class1_prediction).ptr());
-    Py_VISIT(nb::find(w->true_labels).ptr());
-    return 0;
-}
-
-int ebsl_tp_clear(PyObject *self)
-{
-    // Get the C++ object associated with 'self' (this always succeeds)
-    EBSL *w = nb::inst_ptr<EBSL>(self);
-
-    // TODO: Is this necessary?
-    w->slmodels.clear();
-
-    return 0;
-}
-
-// Table of custom type slots we want to install
-PyType_Slot wrapper_slots[] = {
-    {Py_tp_traverse, (void *)ebsl_tp_traverse},
-    {Py_tp_clear, (void *)ebsl_tp_clear},
-    {0, 0}};
-
 NB_MODULE(ebsl_cpp, m)
 {
-    nb::class_<EBSL>(m, "EBSL_cpp", nb::type_slots(wrapper_slots))
+    nb::class_<EBSL>(m, "EBSL_cpp")
         .def(nb::init<>())
         .def(nb::init<float, float, float, float, int>(), "conflict_threshold"_a = 0.15, "max_penalty"_a = 0.5, "b"_a = 1., "trust_restore_speed"_a = 0.5, "base_rate_choice"_a = (int)PRIOR_SOURCE)
         .def("__str__", &EBSL::to_string)

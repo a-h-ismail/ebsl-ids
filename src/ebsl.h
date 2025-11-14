@@ -52,7 +52,9 @@ private:
     int64_t last_id;
     std::unordered_map<int64_t, sl_state_snapshot> state_store;
     std::vector<Opinion> all_discounted_opinions;
-    std::vector<float> all_conflicts;
+    int nb_models;
+
+    void fill_discounted_information_opinions();
 
 public:
     std::vector<BSL_SM *> slmodels;
