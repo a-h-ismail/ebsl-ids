@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.15...3.27)
 project(ebsl_ids)
+set(CMAKE_CXX_STANDARD 20)
 
 if (CMAKE_VERSION VERSION_LESS 3.18)
   set(DEV_MODULE Development)
