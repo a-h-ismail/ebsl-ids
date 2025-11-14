@@ -364,8 +364,10 @@ float EBSL::get_final_prediction()
 
         // Case of prior mode, the previous opinion has its weight
         if (base_rate_choice == PRIOR_SOURCE)
+        {
             printf("Previous prediction: %.3g\n", last_final_opinion.u);
-        slm_weights[nb_models].push_back(last_final_opinion.u);
+            slm_weights[nb_models].push_back(last_final_opinion.u);
+        }
 
         printf("\n* Final opinion:");
         last_final_opinion.print_opinion();
@@ -441,23 +443,12 @@ void EBSL::predict_proba()
 
     if (enable_debugging)
     {
-        int count = nb_models;
-        std::vector<float> tmp;
-        // If debugging, we want to store the distance to average conflicts, penalties and weights
-        for (int i = 0; i < count; ++i)
-        {
-            // tmp is sent by value
-            slm_dist_to_avg.push_back(tmp);
-            slm_weights.push_back(tmp);
-            slm_uncertainty.push_back(tmp);
-            slm_penalties.push_back(tmp);
-        }
-        if (base_rate_choice == PRIOR_SOURCE)
-        {
-            // Account for the weight and uncertainty of the last prediction in prior mode
-            slm_weights.push_back(tmp);
-            slm_uncertainty.push_back(tmp);
-        }
+        slm_dist_to_avg.resize(nb_models);
+        // Prior mode has the weight of the last prediction
+        slm_weights.resize(nb_models + (base_rate_choice == PRIOR_SOURCE ? 1 : 0));
+        // +1 for the final opinion uncertainty
+        slm_uncertainty.resize(nb_models + 1);
+        slm_penalties.resize(nb_models);
     }
 
     // Clear the state map
