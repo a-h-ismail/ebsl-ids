@@ -214,10 +214,12 @@ void EBSL::get_ref_and_conflicts()
     }
     else if (base_rate_choice == TRUST_SOURCE)
     {
-        // Calculate the average of discounted opinions
-        fill_discounted_information_opinions();
-        reference = average_fusion(all_discounted_opinions);
-        reference.a = slmodels[0]->information.a;
+        float total_belief = 0;
+        for (int i = 0; i < nb_models; ++i)
+            total_belief += slmodels[i]->information.b;
+        reference.b = total_belief / nb_models;
+        reference.d = 1 - reference.b;
+        reference.u = 0;
     }
 
     if (enable_debugging)
