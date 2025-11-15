@@ -77,7 +77,8 @@ void EBSL::add_model(BSL_SM *model)
 // Returns the index of the highest belief in modified trust opinions
 int EBSL::find_most_trusted()
 {
-    int max = -1, max_index = -1;
+    float max = -1;
+    int max_index = -1;
     for (int i = 0; i < nb_models; ++i)
         if (max < slmodels[i]->modified_trust.b)
         {
@@ -216,6 +217,7 @@ void EBSL::get_ref_and_conflicts()
         // Calculate the average of discounted opinions
         fill_discounted_information_opinions();
         reference = average_fusion(all_discounted_opinions);
+        reference.a = slmodels[0]->information.a;
     }
 
     if (enable_debugging)
@@ -252,7 +254,7 @@ void EBSL::reevaluate_trust()
             // The model is predicting the positive class, so use the pclass bonus
             if (slmodel->information.b >= 0.5)
             {
-                slmodel->pcumulative_conflict += 1;
+                ++slmodel->pcumulative_conflict;
                 // Used for bonus tuning (to know which models are worth giving bonuses)
                 if (compare_to_true_labels && true_labels.data()[iteration] == true)
                     ++slmodel->pconflict_TP;
@@ -391,28 +393,20 @@ float EBSL::run_once()
     {
         puts("--------------------------------------------");
         printf("Iteration %d\n", iteration);
+        if (multi_flow)
+            printf("Flow ID: %lli \n", id_list.data()[iteration]);
     }
 
     if (multi_flow)
     {
         int64_t current_id = id_list.data()[iteration];
-        if (current_id == last_id && base_rate_choice == PRIOR_SOURCE)
-            // The flow ID didn't change from the last iteration
-            // And our base rate source is the last prediction probability
-            // We only need to update the base rate in this case
-            set_all_base_rates(last_prediction);
-        else
-        {
-            save_state(last_id);
-            load_state(current_id);
-        }
+        save_state(last_id);
+        load_state(current_id);
     }
-    else if (base_rate_choice == 0)
+    else if (base_rate_choice == PRIOR_SOURCE)
         set_all_base_rates(last_prediction);
 
-    // Estimate opinions and their modified average (assuming all inference is done earlier)
     get_all_information_opinions();
-    // Find conflict between undiscounted opinions and modified average
     get_ref_and_conflicts();
     // Based on conflicts, find new trust values
     reevaluate_trust();
