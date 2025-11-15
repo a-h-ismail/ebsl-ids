@@ -35,7 +35,7 @@ eclassifier.get_model_by_name("3").trust_from_mcc(0.72)
 # eclassifier.get_model_by_name("1").set_bonuses(0, 0.2)
 
 # As we are using dummy models, it doesn't need real samples, an empty array will do the trick
-predicted = eclassifier._predict_proba(pd.DataFrame(np.empty((10, 1))))
+predicted = eclassifier.predict_proba(pd.DataFrame(np.empty((10, 1))))
 print(eclassifier)
 print(predicted)
 print("EBSL:", predicted.round())
@@ -65,21 +65,21 @@ for i in range(len(eclassifier.slmodels)):
     # Show probabilities
     axs[0, 0].plot(x, eclassifier.slmodels[i].prediction_cache, label=name, marker="o")
     # Dist to avg
-    axs[0, 1].plot(x, eclassifier._slm_dist_to_avg[i], label=name, marker="o")
+    axs[0, 1].plot(x, eclassifier.slm_dist_to_avg[i], label=name, marker="o")
     # Weights
-    axs[0, 2].plot(x, eclassifier._slm_weights[i], label=name, marker="o")
+    axs[0, 2].plot(x, eclassifier.slm_weights[i], label=name, marker="o")
     # Uncertainty
-    axs[1, 0].plot(x, eclassifier._slm_uncertainty[i], label=name, marker="o")
+    axs[1, 0].plot(x, eclassifier.slm_uncertainty[i], label=name, marker="o")
     # And modifiers
-    axs[1, 1].plot(x, eclassifier._slm_penalties[i], label=name, marker="o")
+    axs[1, 1].plot(x, eclassifier.slm_penalties[i], label=name, marker="o")
 
 # The conflict threshold line
 axs[0, 1].axline((0, eclassifier.conflict_threshold), slope=0, color='r', label="Conflict Threshold")
 # The last prediction weight
-if eclassifier.base_rate_choice_str == "prior":
-    axs[0, 2].plot(x, eclassifier._slm_weights[len(eclassifier.slmodels)], label="Last prediction", marker="x")
+if eclassifier.base_rate_choice == "prior":
+    axs[0, 2].plot(x, eclassifier.slm_weights[len(eclassifier.slmodels)], label="Last prediction", marker="x")
 # And uncertainty
-axs[1, 0].plot(x, eclassifier._slm_uncertainty[len(eclassifier.slmodels)], label="Final opinion", marker="o")
+axs[1, 0].plot(x, eclassifier.slm_uncertainty[len(eclassifier.slmodels)], label="Final opinion", marker="o")
 
 # Prediction comparison between voting classifiers
 axs[1, 2].plot(x, predicted, label="EBSL", marker='x')
