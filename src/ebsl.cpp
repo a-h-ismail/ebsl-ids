@@ -407,6 +407,8 @@ float EBSL::run_once()
     // Update the last ID
     if (multi_flow)
         last_id = current_id;
+
+    return class1_proba;
 }
 
 void EBSL::predict_proba()
@@ -460,7 +462,6 @@ NB_MODULE(ebsl_cpp, m)
         .def_rw("b", &EBSL::b)
         .def_rw("id_list", &EBSL::id_list)
         .def_rw("true_labels", &EBSL::true_labels)
-        .def_rw("slmodels_cpp", &EBSL::slmodels)
         .def_rw("slmodels_dict", &EBSL::slmodels_map)
         .def_rw("slm_dist_to_avg", &EBSL::slm_dist_to_avg)
         .def_rw("slm_uncertainty", &EBSL::slm_uncertainty)
@@ -484,10 +485,10 @@ NB_MODULE(ebsl_cpp, m)
         .def_rw("modified_trust", &BSL_SM::modified_trust)
         .def_rw("pclass_bonus", &BSL_SM::pclass_bonus)
         .def_rw("nclass_bonus", &BSL_SM::nclass_bonus)
-        .def_rw("pcumulative_conflict", &BSL_SM::pcumulative_conflict)
-        .def_rw("pconflict_TP", &BSL_SM::pconflict_TP)
-        .def_rw("ncumulative_conflict", &BSL_SM::ncumulative_conflict)
-        .def_rw("nconflict_TN", &BSL_SM::nconflict_TN)
+        .def_ro("pcumulative_conflict", &BSL_SM::pcumulative_conflict)
+        .def_ro("pconflict_TP", &BSL_SM::pconflict_TP)
+        .def_ro("ncumulative_conflict", &BSL_SM::ncumulative_conflict)
+        .def_ro("nconflict_TN", &BSL_SM::nconflict_TN)
         .def_rw("name", &BSL_SM::name);
 
     m.def("average_fusion", &average_fusion);

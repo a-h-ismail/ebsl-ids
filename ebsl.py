@@ -72,33 +72,17 @@ class BSL_SM:
     def pcumulative_conflict(self):
         return self.bsl_cpp.pcumulative_conflict
 
-    @pcumulative_conflict.setter
-    def pcumulative_conflict(self, value):
-        self.bsl_cpp.pcumulative_conflict = value
-
     @property
     def ncumulative_conflict(self):
         return self.bsl_cpp.ncumulative_conflict
-
-    @ncumulative_conflict.setter
-    def ncumulative_conflict(self, value):
-        self.bsl_cpp.ncumulative_conflict = value
 
     @property
     def pconflict_TP(self):
         return self.bsl_cpp.pconflict_TP
 
-    @pconflict_TP.setter
-    def pconflict_TP(self, value):
-        self.bsl_cpp.pconflict_TP = value
-
     @property
     def nconflict_TN(self):
         return self.bsl_cpp.nconflict_TN
-
-    @nconflict_TN.setter
-    def nconflict_TN(self, value):
-        self.bsl_cpp.nconflict_TN = value
 
     @property
     def name(self):
