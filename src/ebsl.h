@@ -20,6 +20,7 @@ enum
 typedef struct sl_state_snapshot
 {
     float last_prediction_proba;
+    int models_in_conflict;
     std::vector<float> conflict_counters, bonuses, trust_offset;
 } sl_state_snapshot;
 
@@ -34,7 +35,11 @@ private:
     int64_t last_id;
     std::unordered_map<int64_t, sl_state_snapshot> states_map;
     std::vector<Opinion> all_discounted_opinions;
+    std::vector<float> base_weights;
     int nb_models;
+    int models_in_conflict;
+
+    void init_base_weights();
 
     // Sets base_rate to all original information opinions
     void set_all_base_rates(float base_rate);
@@ -43,7 +48,7 @@ private:
     int find_most_trusted();
 
     // Updates the vector "all_discounted_opinions"
-    void updated_discounted_info_vector();
+    void update_discounted_info_vector();
 
     // Saves the current subjective logic state to the state of flow_id
     void save_state(int64_t flow_id);

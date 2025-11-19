@@ -3,7 +3,7 @@
 #include "ebsl.h"
 #include <format>
 
-void EBSL::updated_discounted_info_vector()
+void EBSL::update_discounted_info_vector()
 {
     for (int i = 0; i < nb_models; ++i)
         all_discounted_opinions[i] = slmodels[i]->discounted_information;
@@ -31,6 +31,7 @@ void EBSL::clear_sl_state()
         m->conflict = m->conflict_counter = m->curr_bonus = m->trust_offset = 0;
         m->modified_trust = m->trust;
     }
+    models_in_conflict = 0;
 }
 
 std::string EBSL::to_string()
@@ -88,6 +89,42 @@ int EBSL::find_most_trusted()
     return max_index;
 }
 
+void EBSL::init_base_weights()
+{
+    int model_count;
+    base_weights.clear();
+    float tmp, numerator, denominator = 0, weights_sum = 0;
+
+    // Find the common denominator
+    for (int i = 0; i < nb_models; ++i)
+    {
+        tmp = 1;
+        for (int j = 0; j < nb_models; ++j)
+        {
+            if (j == i)
+                continue;
+            else
+                tmp *= 1 - slmodels[j]->trust.b;
+        }
+        denominator += tmp;
+    }
+    for (int i = 0; i < nb_models; ++i)
+    {
+        numerator = slmodels[i]->trust.b;
+        for (int j = 0; j < nb_models; ++j)
+        {
+            if (i == j)
+                continue;
+            else
+                numerator *= 1 - slmodels[j]->trust.b;
+        }
+        base_weights.push_back(numerator / denominator);
+        weights_sum += numerator / denominator;
+    }
+
+    // Take the weight of uncertainty into account
+    base_weights.push_back(1 - weights_sum);
+}
 void EBSL::set_all_base_rates(float base_rate)
 {
     for (int i = 0; i < nb_models; ++i)
@@ -101,6 +138,7 @@ void EBSL::save_state(int64_t flow_id)
         auto state_entry = states_map.at(flow_id);
         // Update the stored state instead of allocating a new one with updated information
         state_entry.last_prediction_proba = last_prediction;
+        state_entry.models_in_conflict = models_in_conflict;
 
         // Store updated bonuses and conflict counters
         for (int i = 0; i < nb_models; ++i)
@@ -116,6 +154,7 @@ void EBSL::save_state(int64_t flow_id)
     {
         sl_state_snapshot new_entry;
         new_entry.last_prediction_proba = last_prediction;
+        new_entry.models_in_conflict = models_in_conflict;
         // Store bonuses and conflict counters
         for (int i = 0; i < nb_models; ++i)
         {
@@ -134,6 +173,7 @@ void EBSL::load_state(int64_t flow_id)
         auto state_entry = states_map.at(flow_id);
         // Restore the last prediction
         last_prediction = state_entry.last_prediction_proba;
+        models_in_conflict = state_entry.models_in_conflict;
 
         // Load updated bonuses and conflict counters and recalculate the modified trust
         for (int i = 0; i < nb_models; ++i)
@@ -170,12 +210,12 @@ void EBSL::get_all_information_opinions()
     else if (base_rate_choice == PRIOR_SOURCE)
         set_all_base_rates(last_prediction);
 
-    // Calculate the information opinion after discounting with modified trust
-    for (BSL_SM *slmodel : slmodels)
-        slmodel->get_discounted_information_opinion();
-
     if (enable_debugging)
     {
+        // Skipped above for optimization reasons (deferred until get_final_prediction) but needed here
+        for (BSL_SM *slmodel : slmodels)
+            slmodel->get_discounted_information_opinion();
+
         puts("* Initialization");
         puts("Information opinions:");
         for (BSL_SM *slmodel : slmodels)
@@ -225,8 +265,10 @@ void EBSL::get_ref_and_conflicts()
     }
 
     // Calculate conflict of each model with the reference
+    // WARNING: It is assumed that both information and reference opinions are dogmatic
+    // The original conflict equation is then reduced to simple belief distance
     for (BSL_SM *slmodel : slmodels)
-        slmodel->conflict = slmodel->information.calculate_conflict(reference);
+        slmodel->conflict = fabs(slmodel->information.b - reference.b);
 }
 
 void EBSL::reevaluate_trust()
@@ -243,6 +285,10 @@ void EBSL::reevaluate_trust()
 
         if (distance_to_average_conf > conflict_threshold)
         {
+            // This is the first time this model is getting a penalty, increase the models in conflict counter
+            if (slmodel->conflict_counter == 0)
+                ++models_in_conflict;
+
             // Condition met, increment the conflict counter to increase penalty
             ++slmodel->conflict_counter;
             slmodel->trust_offset = get_penalty(slmodel->conflict_counter);
@@ -269,7 +315,7 @@ void EBSL::reevaluate_trust()
                 slmodel->trust_offset -= slmodel->nclass_bonus;
                 slmodel->curr_bonus = slmodel->nclass_bonus;
             }
-            // Recalculate the modified trust opinion immediately (to avoid EBSL::always recalculating all trust opinions later)
+            // Recalculate the modified trust opinion immediately (to avoid EBSL always recalculating all trust opinions later)
             modify_trust(slmodel->trust, slmodel->trust_offset, slmodel->modified_trust);
             // And the new discounted information opinion
             slmodel->get_discounted_information_opinion();
@@ -280,8 +326,11 @@ void EBSL::reevaluate_trust()
             slmodel->conflict_counter -= std::min(trust_restore_speed, slmodel->conflict_counter);
 
             if (slmodel->conflict_counter == 0)
-                // Reset both counters
+            {
+                // Reset both counters and decrement the "models in conflict" counter
                 slmodel->trust_offset = slmodel->curr_bonus = 0;
+                --models_in_conflict;
+            }
             else
                 slmodel->trust_offset = get_penalty(slmodel->conflict_counter) - slmodel->curr_bonus;
 
@@ -328,16 +377,34 @@ void EBSL::reevaluate_trust()
 
 float EBSL::get_final_prediction()
 {
-    updated_discounted_info_vector();
+    // Reuse precalculated base weights to avoid the expensive average fusion
+    if (models_in_conflict == 0)
+    {
+        float b = 0, d, u;
+        for (int i = 0; i < nb_models; ++i)
+            b += base_weights[i] * slmodels[i]->information.b;
+        u = base_weights[nb_models];
+        d = 1 - b - u;
+        last_final_opinion.b = b;
+        last_final_opinion.d = d;
+        last_final_opinion.u = u;
+    }
+    else
+    {
+        // Before average fusion we must update the discounted information opinions
+        for (BSL_SM *slmodel : slmodels)
+            slmodel->get_discounted_information_opinion();
+        update_discounted_info_vector();
+        last_final_opinion = average_fusion(all_discounted_opinions);
+    }
 
-    last_final_opinion = average_fusion(all_discounted_opinions);
-    // The base rate should be the same everywhere, so set it to the final opinion (or it will stay 0)
-    last_final_opinion.a = all_discounted_opinions[0].a;
-
+    // The base rate should be the same in every information opinion
+    last_final_opinion.a = slmodels[0]->information.a;
     last_prediction = last_final_opinion.projected_probability();
 
     if (enable_debugging)
     {
+        update_discounted_info_vector();
         puts("\n* Effective weights:");
         int most_trusted;
         if (base_rate_choice == TRUST_SOURCE)
@@ -418,6 +485,8 @@ void EBSL::predict_proba()
     slm_weights.clear();
     slm_penalties.clear();
     slm_uncertainty.clear();
+    models_in_conflict = 0;
+    init_base_weights();
 
     // Preallocate debug vectors if needed
     if (enable_debugging)
@@ -443,10 +512,11 @@ void EBSL::predict_proba()
     int nb_rows = class1_prediction.shape(0);
 
     float class1;
+    auto results = class1_prediction.data();
     for (current_iteration = 0; current_iteration < nb_rows; ++current_iteration)
     {
         class1 = run_once();
-        class1_prediction.data()[current_iteration] = class1;
+        results[current_iteration] = class1;
     }
 }
 
