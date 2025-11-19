@@ -36,7 +36,6 @@ void EBSL::clear_sl_state()
 
 std::string EBSL::to_string()
 {
-    char tmp[200];
     const char *base_rate_choice_str;
     switch (base_rate_choice)
     {
@@ -47,12 +46,10 @@ std::string EBSL::to_string()
         base_rate_choice_str = "trust";
         break;
     default:
-        // A nice warning to those who forget to update this switch
-        base_rate_choice_str = "UNKNOWN!!";
+        throw std::runtime_error(std::format("Unrecognized operation mode \"{}\"", base_rate_choice));
     }
-    sprintf(tmp, "EBSL classifier: conflict_threshold=%g, max_penalty=%g, b=%g, trust_restore_speed=%g, base_rate_choice:\"%s\", nb_of_classifiers = %d",
-            conflict_threshold, max_penalty, b, trust_restore_speed, base_rate_choice_str, (int)nb_models);
-    return std::string(tmp);
+    return std::format("EBSL classifier: conflict_threshold={:g}, max_penalty={:g}, b={:g}, trust_restore_speed={:g}, base_rate_choice:\"{}\", nb_of_classifiers = {}",
+                       conflict_threshold, max_penalty, b, trust_restore_speed, base_rate_choice_str, (int)nb_models);
 }
 
 void EBSL::add_model(BSL_SM *model)
@@ -222,7 +219,6 @@ void EBSL::get_all_information_opinions()
         {
             printf("Model %s: ", slmodel->name.c_str());
             slmodel->information.print_opinion();
-            putchar('\n');
         }
 
         puts("\n* Before trust update");
@@ -231,7 +227,6 @@ void EBSL::get_all_information_opinions()
         {
             printf("Model %s: ", slmodel->name.c_str());
             slmodel->discounted_information.print_opinion();
-            putchar('\n');
         }
     }
 }
@@ -261,7 +256,6 @@ void EBSL::get_ref_and_conflicts()
     {
         printf("Reference opinion: ");
         reference.print_opinion();
-        puts("\n");
     }
 
     // Calculate conflict of each model with the reference
@@ -362,7 +356,6 @@ void EBSL::reevaluate_trust()
         {
             printf("Model %s: ", slmodel->name.c_str());
             slmodel->discounted_information.print_opinion();
-            putchar('\n');
         }
 
         // Store dist to average conflict, penalties and uncertainty
@@ -436,7 +429,7 @@ float EBSL::get_final_prediction()
         printf("\n* Final opinion:");
         last_final_opinion.print_opinion();
         // Projected probability is made of 2 parts: belief and contribution of prior probability
-        printf("\nBase rate contribution = %.3g\n", last_final_opinion.a * last_final_opinion.u);
+        printf("Base rate contribution = %.3g\n", last_final_opinion.a * last_final_opinion.u);
         printf("Class 1 Probability = %.3g\n", last_prediction);
 
         slm_uncertainty[nb_models].push_back(last_final_opinion.u);
@@ -561,9 +554,9 @@ NB_MODULE(ebsl_cpp, m)
         .def_ro("nconflict_TN", &BSL_SM::nconflict_TN)
         .def_rw("name", &BSL_SM::name);
 
-    m.def("average_fusion", &average_fusion);
-    m.def("modify_trust", &modify_trust);
-    m.def("uncertainty_product", &uncertainty_product);
+    m.def("average_fusion", &average_fusion, "all_opinions"_a);
+    m.def("modify_trust", &modify_trust, "trust"_a, "offset"_a, "out"_a);
+    m.def("uncertainty_product", &uncertainty_product, "all_opinions"_a, "exception_index"_a);
     nb::class_<Opinion>(m, "Opinion")
         .def(nb::init<>())
         .def(nb::init<float, float, float, float>(), "b"_a, "d"_a, "u"_a, "a"_a = 1)

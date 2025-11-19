@@ -4,6 +4,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
+#include <format>
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -44,19 +45,18 @@ Opinion::Opinion(float belief, float disbelief, float uncertainty, float base_ra
     d = disbelief;
     u = uncertainty;
     a = base_rate;
+    validate_opinion();
 }
 
 std::string Opinion::to_string()
 {
-    char tmp[100];
-    sprintf(tmp, "b = %g, d = %g, u = %g, a = %g", b, d, u, a);
-    return std::string(tmp);
+    return std::format("b = {:g}, d = {:g}, u = {:g}, a = {:g}", b, d, u, a);
 }
 
 // The binomial opinion class
 void Opinion::print_opinion()
 {
-    printf("b = %g, d = %g, u = %g, a = %g", b, d, u, a);
+    printf("b = %g, d = %g, u = %g, a = %g\n", b, d, u, a);
 }
 
 int Opinion::validate_opinion()
