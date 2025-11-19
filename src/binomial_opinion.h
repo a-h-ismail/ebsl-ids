@@ -2,17 +2,19 @@
 #define BINOMIAL_OPINION_H
 #include <vector>
 #include <string>
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/vector.h>
+
 // The binomial opinion class
 class Opinion
 {
-    friend class EBSL;
-
 public:
     float b, d, u, a;
 
     Opinion();
 
-    Opinion(float belief, float disbelief, float uncertainty, float base_rate);
+    Opinion(float belief, float disbelief, float uncertainty, float base_rate = 0);
 
     std::string to_string();
 
@@ -20,7 +22,7 @@ public:
 
     void set_parameters(float b, float d, float u, float a=-1);
 
-    int validate_opinion();
+    void validate_opinion();
 
     void trust_discounting(Opinion &trust, Opinion &out);
 
@@ -28,9 +30,6 @@ public:
 
     float calculate_conflict(Opinion reference);
 };
-
-// Check if belief opinions are valid (b+d+u=1 and b,d,u,a in [0;1])
-int validate_opinions(Opinion *all_opinions, int count);
 
 Opinion average_fusion(std::vector<Opinion> &all_opinions);
 

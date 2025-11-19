@@ -1,9 +1,6 @@
 #include <iostream>
 #include <math.h>
 #include "binomial_opinion.h"
-#include <nanobind/nanobind.h>
-#include <nanobind/stl/string.h>
-#include <nanobind/stl/vector.h>
 #include <format>
 
 namespace nb = nanobind;
@@ -59,14 +56,10 @@ void Opinion::print_opinion()
     printf("b = %g, d = %g, u = %g, a = %g\n", b, d, u, a);
 }
 
-int Opinion::validate_opinion()
+void Opinion::validate_opinion()
 {
-    if (valid_proba(b) != 0 || valid_proba(d != 0) || valid_proba(u != 0))
-        return 1;
-    if (fabs(1 - b - d - u) > 1e-5)
-        return 1;
-    else
-        return 0;
+    if (valid_proba(b) != 0 || valid_proba(d) != 0 || valid_proba(u) != 0 || valid_proba(a) || fabs(1 - b - d - u) > 1e-6)
+        throw std::range_error("b, d, u, a must be in range [0;1] and b+d+u=1");
 }
 
 // Helper function for belief fusion product of uncertainty with a single exception
@@ -109,8 +102,8 @@ Opinion average_fusion(std::vector<Opinion> &all_opinions)
     fused.u = numerator * count / denominator;
 
     fused.d = 1 - fused.b - fused.u;
-    if (fused.validate_opinion() != 0)
-        exit(1);
+    // Should never fail but keep it just in case
+    fused.validate_opinion();
 
     return fused;
 }
@@ -150,14 +143,4 @@ float Opinion::calculate_conflict(Opinion reference)
     pd = fabs(reference.projected_probability() - projected_probability());
     cc = (1 - reference.u) * (1 - u);
     return pd * cc;
-}
-
-// Check if belief opinions are valid (b+d+u=1 and b,d,u,a in [0;1])
-int validate_opinions(Opinion *all_opinions, int count)
-{
-    for (int i = 0; i < count; ++i)
-        if (all_opinions[i].validate_opinion() != 0)
-            return 1;
-
-    return 0;
 }
