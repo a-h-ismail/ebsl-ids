@@ -65,11 +65,46 @@ void EBSL::add_model(BSL_SM *model)
         // As it should be, the name doesn't exist so add this model
         slmodels.push_back(model);
         slmodels_map[model->name] = model;
-        // Clear already stored states just in case
+        // Clear already stored states
         states_map.clear();
         nb_models = slmodels.size();
         all_discounted_opinions.resize(nb_models);
     }
+}
+
+void EBSL::remove_model(std::string name)
+{
+    try
+    {
+        auto model = slmodels_map.at(name);
+        // The name exists, remove it from the dict and find where it is in the
+        slmodels_map.erase(name);
+        for (int i = 0; i < nb_models; ++i)
+        {
+            if (slmodels[i]->name == name)
+            {
+                slmodels.erase(slmodels.begin() + i);
+                break;
+            }
+        }
+        // Clear already stored states as they are no longer properly ordered
+        states_map.clear();
+        nb_models = slmodels.size();
+        all_discounted_opinions.resize(nb_models);
+    }
+    catch (const std::out_of_range &e)
+    {
+        throw std::out_of_range(std::format("The model with name \"{}\" doesn't exist!", name));
+    }
+}
+
+void EBSL::clear_all_models()
+{
+    slmodels.clear();
+    slmodels_map.clear();
+    states_map.clear();
+    nb_models = 0;
+    all_discounted_opinions.clear();
 }
 
 int EBSL::find_most_trusted()
@@ -520,6 +555,8 @@ NB_MODULE(ebsl_cpp, m)
         .def(nb::init<float, float, float, float, int>(), "conflict_threshold"_a = 0.15, "max_penalty"_a = 0.5, "b"_a = 1., "trust_restore_speed"_a = 0.5, "base_rate_choice"_a = (int)PRIOR_SOURCE)
         .def("__str__", &EBSL::to_string)
         .def("add_model", &EBSL::add_model, "model"_a)
+        .def("remove_model", &EBSL::remove_model, "name"_a)
+        .def("clear_all_models", &EBSL::clear_all_models)
         .def("predict_proba", &EBSL::predict_proba)
         .def_rw("max_penalty", &EBSL::max_penalty)
         .def_rw("b", &EBSL::b)

@@ -96,6 +96,12 @@ public:
     // Warning: Managing the pointer memory is your responsibility (if it was dynamically allocated)
     void add_model(BSL_SM *model);
 
+    // Removes the model with the specified name
+    void remove_model(std::string name);
+
+    // Clears all BSL_SM models from the classifier
+    void clear_all_models();
+
     // Returns the penalty corresponding to the provided nb_conflict counter
     float get_penalty(float nb_conflict);
 

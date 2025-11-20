@@ -145,7 +145,7 @@ class EBSL:
         _debug: Enables debugging output
         """
         self.base_rate_choice: str
-        self.slmodels: list[BSL_SM] = []
+        self._slmodels: list[BSL_SM] = []
         if base_rate_choice == "prior":
             base_rate_choice_val = 0
         elif base_rate_choice == "trust":
@@ -167,13 +167,30 @@ class EBSL:
         if model.name in self._slmodels_dict:
            raise RuntimeError("The Model with name %s already exists!" % model.name)
         else:
-            self.slmodels.append(model)
+            self._slmodels.append(model)
             self.ebsl_cpp.add_model(model.bsl_cpp)
             self._slmodels_dict[model.name] = model
 
+    def remove_model(self, name):
+        # Remove the BSL_SM model from the C++ side first
+        # Remember that it was allocated on the Python side so we can't remove it from Python first
+        self.ebsl_cpp.remove_model(name)
+
+        del self._slmodels_dict[name]
+        for i in range(len(self._slmodels)):
+            if self._slmodels[i].name == name:
+                del self._slmodels[i]
+                break
+
+    def clear_all_models(self):
+        self.ebsl_cpp.clear_all_models()
+
+        self._slmodels.clear()
+        self._slmodels_dict.clear()
+
     def _gen_prediction_cache(self, samples: pd.DataFrame):
         """Fills the prediction cache of all models for the current samples"""
-        for model in self.slmodels:
+        for model in self._slmodels:
             model.predict_proba_to_cache(samples)
 
     def trust_from_dataset_mcc(self, samples: pd.DataFrame, true_labels) -> None:
@@ -181,7 +198,7 @@ class EBSL:
         Note: This function fills the prediction cache for all models."""
         self._gen_prediction_cache(samples)
         true_labels = np.asarray(true_labels)
-        for model in self.slmodels:
+        for model in self._slmodels:
             # pyright: ignore[reportCallIssue, reportArgumentType]
             mcc = matthews_corrcoef(true_labels, np.round(model.prediction_cache))
             model.trust_from_mcc(mcc)
@@ -211,11 +228,11 @@ class EBSL:
 
         self.trust_from_dataset_mcc(samples, true_labels)
         # Reset bonus for all models and set initial trust from MCC
-        for slmodel in self.slmodels:
+        for slmodel in self._slmodels:
             slmodel.set_bonuses(0, 0)
 
         # Sort models in the internal list according to the trust
-        self.slmodels.sort(key=lambda x: x.bsl_cpp.trust.b, reverse=descending_order)
+        self._slmodels.sort(key=lambda x: x.bsl_cpp.trust.b, reverse=descending_order)
 
         # Perform a run without bonuses to get a baseline of models behavior under conflict
         predicted = self.predict(samples, False, true_labels)
@@ -227,7 +244,7 @@ class EBSL:
         max_bonus = self.ebsl_cpp.max_penalty
 
         # Traversing models in descending order
-        for model in self.slmodels:
+        for model in self._slmodels:
             if _show_progress:
                 print("Tuning bonuses of model \"%s\" started:" % model.bsl_cpp.name)
             # Loop to find the best positive class bonus
@@ -382,7 +399,7 @@ class EBSL:
     def _merge_caches(self):
         """Combines all predictions"""
         predictions = []
-        for model in self.slmodels:
+        for model in self._slmodels:
             predictions.append(model.prediction_cache)
         return np.array(predictions).T
 
@@ -397,7 +414,7 @@ class EBSL:
     def _soft_vote_prob(self):
         caches = self._merge_caches()
         sum_votes = np.sum(caches, axis=1)
-        prob = np.divide(sum_votes, len(self.slmodels))
+        prob = np.divide(sum_votes, len(self._slmodels))
         return prob
 
     def _soft_vote(self):
