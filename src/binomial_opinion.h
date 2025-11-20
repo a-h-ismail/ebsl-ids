@@ -20,7 +20,7 @@ public:
 
     void print_opinion();
 
-    void set_parameters(float b, float d, float u, float a=-1);
+    void set_parameters(float b, float d, float u, float a = 0);
 
     void validate_opinion();
 
