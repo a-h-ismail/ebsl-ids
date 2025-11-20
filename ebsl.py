@@ -30,20 +30,26 @@ class BSL_SM:
         """
         self.model = model
         self.scaler = scaler
-        if trust_opinion is not None:
-            self._trust_opinion = trust_opinion
-        else:
-            self._trust_opinion = Opinion()
 
         if name == "":
             name = str(uuid4()).replace('-', '')[:16]
 
         # The C++ core implementation
         self.bsl_cpp = BSL_SM_cpp()
+        if trust_opinion is not None:
+            self.bsl_cpp.trust = trust_opinion
 
         self.name = name
 
     # For direct access of the C++ implementation from Python
+    @property
+    def trust(self):
+        return self.bsl_cpp.trust
+
+    @trust.setter
+    def trust(self, value):
+        self.bsl_cpp.trust = value
+
     @property
     def prediction_cache(self):
         return self.bsl_cpp.prediction_cache
@@ -154,7 +160,7 @@ class EBSL:
     def __str__(self) -> str:
         return self.ebsl_cpp.__str__()
 
-    def get_model_by_name(self, name: str):
+    def get_model_by_name(self, name: str) -> BSL_SM:
         return self._slmodels_dict[name]
 
     def add_model(self, model: BSL_SM):
