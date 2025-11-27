@@ -1,3 +1,6 @@
+// Copyright (C) 2025 Ahmad Ismail
+// SPDX-License-Identifier: MPL-2.0
+
 #include "binomial_opinion.h"
 #include "bsl_sm.h"
 #include <nanobind/stl/vector.h>

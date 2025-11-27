@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-from array import array
-import copy
+
+# Copyright (C) 2025 Ahmad Ismail
+# SPDX-License-Identifier: MPL-2.0
+
 from typing import Literal
 from uuid import uuid4
 import numpy as np
@@ -165,7 +167,7 @@ class EBSL:
 
     def add_model(self, model: BSL_SM):
         if model.name in self._slmodels_dict:
-           raise RuntimeError("The Model with name %s already exists!" % model.name)
+            raise RuntimeError("The Model with name %s already exists!" % model.name)
         else:
             self._slmodels.append(model)
             self.ebsl_cpp.add_model(model.bsl_cpp)

@@ -1,3 +1,6 @@
+// Copyright (C) 2025 Ahmad Ismail
+// SPDX-License-Identifier: MPL-2.0
+
 #include <iostream>
 #include <math.h>
 #include "binomial_opinion.h"

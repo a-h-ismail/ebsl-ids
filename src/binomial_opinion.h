@@ -1,3 +1,6 @@
+// Copyright (C) 2025 Ahmad Ismail
+// SPDX-License-Identifier: MPL-2.0
+
 #ifndef BINOMIAL_OPINION_H
 #define BINOMIAL_OPINION_H
 #include <vector>

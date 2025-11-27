@@ -1,3 +1,6 @@
+// Copyright (C) 2025 Ahmad Ismail
+// SPDX-License-Identifier: MPL-2.0
+
 #ifndef BSL_SM_H
 #define BSL_SM_H
 #include "binomial_opinion.h"

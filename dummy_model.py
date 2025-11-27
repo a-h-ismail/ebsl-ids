@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+
+# Copyright (C) 2025 Ahmad Ismail
+# SPDX-License-Identifier: MPL-2.0
+
 import numpy as np
 
 

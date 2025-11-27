@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+
+# Copyright (C) 2025 Ahmad Ismail
+# SPDX-License-Identifier: MPL-2.0
+
 import pandas as pd
 import ebsl as sl
 import dummy_model as dm
@@ -60,10 +64,10 @@ axs[0, 0].set_ylim([0, 1])
 axs[1, 2].set_ylim([0, 1])
 
 # Plot debug metrics
-for i in range(len(eclassifier.slmodels)):
+for i in range(len(eclassifier._slmodels)):
     name = "Model %d" % (i+1)
     # Show probabilities
-    axs[0, 0].plot(x, eclassifier.slmodels[i].prediction_cache, label=name, marker="o")
+    axs[0, 0].plot(x, eclassifier._slmodels[i].prediction_cache, label=name, marker="o")
     # Dist to avg
     axs[0, 1].plot(x, eclassifier.slm_dist_to_avg[i], label=name, marker="o")
     # Weights
@@ -77,9 +81,9 @@ for i in range(len(eclassifier.slmodels)):
 axs[0, 1].axline((0, eclassifier.conflict_threshold), slope=0, color='r', label="Conflict Threshold")
 # The last prediction weight
 if eclassifier.base_rate_choice == "prior":
-    axs[0, 2].plot(x, eclassifier.slm_weights[len(eclassifier.slmodels)], label="Last prediction", marker="x")
+    axs[0, 2].plot(x, eclassifier.slm_weights[len(eclassifier._slmodels)], label="Last prediction", marker="x")
 # And uncertainty
-axs[1, 0].plot(x, eclassifier.slm_uncertainty[len(eclassifier.slmodels)], label="Final opinion", marker="o")
+axs[1, 0].plot(x, eclassifier.slm_uncertainty[len(eclassifier._slmodels)], label="Final opinion", marker="o")
 
 # Prediction comparison between voting classifiers
 axs[1, 2].plot(x, predicted, label="EBSL", marker='x')
