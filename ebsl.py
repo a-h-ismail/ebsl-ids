@@ -38,78 +38,78 @@ class BSL_SM:
             name = str(uuid4()).replace('-', '')[:16]
 
         # The C++ core implementation
-        self.bsl_cpp = BSL_SM_cpp()
+        self._bsl_cpp = BSL_SM_cpp()
         if trust_opinion is not None:
-            self.bsl_cpp.trust = trust_opinion
+            self._bsl_cpp.trust = trust_opinion
 
         self.name = name
 
     # For direct access of the C++ implementation from Python
     @property
     def trust(self):
-        return self.bsl_cpp.trust
+        return self._bsl_cpp.trust
 
     @trust.setter
     def trust(self, value):
-        self.bsl_cpp.trust = value
+        self._bsl_cpp.trust = value
 
     @property
     def prediction_cache(self):
-        return self.bsl_cpp.prediction_cache
+        return self._bsl_cpp.prediction_cache
 
     @prediction_cache.setter
     def prediction_cache(self, value):
-        self.bsl_cpp.prediction_cache = value
+        self._bsl_cpp.prediction_cache = value
 
     @property
     def pclass_bonus(self):
-        return self.bsl_cpp.pclass_bonus
+        return self._bsl_cpp.pclass_bonus
 
     @pclass_bonus.setter
     def pclass_bonus(self, value):
-        self.bsl_cpp.pclass_bonus = value
+        self._bsl_cpp.pclass_bonus = value
 
     @property
     def nclass_bonus(self):
-        return self.bsl_cpp.nclass_bonus
+        return self._bsl_cpp.nclass_bonus
 
     @nclass_bonus.setter
     def nclass_bonus(self, value):
-        self.bsl_cpp.nclass_bonus = value
+        self._bsl_cpp.nclass_bonus = value
 
     @property
     def pcumulative_conflict(self):
-        return self.bsl_cpp.pcumulative_conflict
+        return self._bsl_cpp.pcumulative_conflict
 
     @property
     def ncumulative_conflict(self):
-        return self.bsl_cpp.ncumulative_conflict
+        return self._bsl_cpp.ncumulative_conflict
 
     @property
     def pconflict_TP(self):
-        return self.bsl_cpp.pconflict_TP
+        return self._bsl_cpp.pconflict_TP
 
     @property
     def nconflict_TN(self):
-        return self.bsl_cpp.nconflict_TN
+        return self._bsl_cpp.nconflict_TN
 
     @property
     def name(self):
-        return self.bsl_cpp.name
+        return self._bsl_cpp.name
 
     @name.setter
     def name(self, value):
-        self.bsl_cpp.name = value
+        self._bsl_cpp.name = value
 
     def set_initial_trust_opinion(self, b, d, u):
-        self.bsl_cpp.set_initial_trust_opinion(b, d, u)
+        self._bsl_cpp.set_initial_trust_opinion(b, d, u)
 
     def trust_from_mcc(self, mcc: float, w=2):
         """Sets the trust opinion of this model using its Matthews correlation coefficient (MCC)"""
-        self.bsl_cpp.trust_from_mcc(mcc, w)
+        self._bsl_cpp.trust_from_mcc(mcc, w)
 
     def set_bonuses(self, nclass_bonus: float, pclass_bonus: float):
-        self.bsl_cpp.set_bonuses(nclass_bonus, pclass_bonus)
+        self._bsl_cpp.set_bonuses(nclass_bonus, pclass_bonus)
 
     def predict_proba_to_cache(self, samples):
         """
@@ -119,14 +119,13 @@ class BSL_SM:
             samples = samples[self.scaler.get_feature_names_out()]
             samples = self.scaler.transform(samples)
 
-        self._pycache_holder = np.asarray(self.model.predict_proba(samples)[:, 1], dtype=np.float32, order='C')
-        self.prediction_cache = self._pycache_holder
+        self.prediction_cache = np.asarray(self.model.predict_proba(samples)[:, 1], dtype=np.float32, order='C')
 
 
 class EBSL:
     "EBSL: Ensemble Binomial Subjective Logic"
 
-    def __init__(self, conflict_threshold=0.15, max_penalty=0.5, b=1., trust_restore_speed=0.5, base_rate_choice: Literal["prior", "trust"] = "prior", id_col: str = "", _debug=False) -> None:
+    def __init__(self, conflict_threshold=0.15, max_penalty=0.5, b=5., trust_restore_speed=0.5, base_rate_choice: Literal["prior", "trust"] = "prior", id_col: str = "", _debug=False) -> None:
         """
         Collection of BSL_SM models. Enables prediction aggregation using subjective logic
 
@@ -156,12 +155,12 @@ class EBSL:
 
         self.base_rate_choice = base_rate_choice
         self._id_col = id_col
-        self.ebsl_cpp = EBSL_cpp(conflict_threshold, max_penalty, b, trust_restore_speed, base_rate_choice_val)
-        self.ebsl_cpp.enable_debugging = _debug
+        self._ebsl_cpp = EBSL_cpp(conflict_threshold, max_penalty, b, trust_restore_speed, base_rate_choice_val)
+        self._ebsl_cpp.enable_debugging = _debug
         self._slmodels_dict = {}
 
     def __str__(self) -> str:
-        return self.ebsl_cpp.__str__()
+        return self._ebsl_cpp.__str__()
 
     def get_model_by_name(self, name: str) -> BSL_SM:
         return self._slmodels_dict[name]
@@ -171,13 +170,13 @@ class EBSL:
             raise RuntimeError("The Model with name %s already exists!" % model.name)
         else:
             self._slmodels.append(model)
-            self.ebsl_cpp.add_model(model.bsl_cpp)
+            self._ebsl_cpp.add_model(model._bsl_cpp)
             self._slmodels_dict[model.name] = model
 
     def remove_model(self, name):
         # Remove the BSL_SM model from the C++ side first
         # Remember that it was allocated on the Python side so we can't remove it from Python first
-        self.ebsl_cpp.remove_model(name)
+        self._ebsl_cpp.remove_model(name)
 
         del self._slmodels_dict[name]
         for i in range(len(self._slmodels)):
@@ -186,7 +185,7 @@ class EBSL:
                 break
 
     def clear_all_models(self):
-        self.ebsl_cpp.clear_all_models()
+        self._ebsl_cpp.clear_all_models()
 
         self._slmodels.clear()
         self._slmodels_dict.clear()
@@ -202,7 +201,6 @@ class EBSL:
         self._gen_prediction_cache(samples)
         true_labels = np.asarray(true_labels)
         for model in self._slmodels:
-            # pyright: ignore[reportCallIssue, reportArgumentType]
             mcc = matthews_corrcoef(true_labels, np.round(model.prediction_cache))
             model.trust_from_mcc(mcc)
 
@@ -235,7 +233,7 @@ class EBSL:
             slmodel.set_bonuses(0, 0)
 
         # Sort models in the internal list according to the trust
-        self._slmodels.sort(key=lambda x: x.bsl_cpp.trust.b, reverse=descending_order)
+        self._slmodels.sort(key=lambda x: x._bsl_cpp.trust.b, reverse=descending_order)
 
         # Perform a run without bonuses to get a baseline of models behavior under conflict
         predicted = self.predict(samples, False, true_labels)
@@ -244,40 +242,40 @@ class EBSL:
         if _show_progress:
             print("Baseline MCC (no bonuses): %g" % old_mcc)
 
-        max_bonus = self.ebsl_cpp.max_penalty
+        max_bonus = self._ebsl_cpp.max_penalty
 
         # Traversing models in descending order
         for model in self._slmodels:
             if _show_progress:
-                print("Tuning bonuses of model \"%s\" started:" % model.bsl_cpp.name)
+                print("Tuning bonuses of model \"%s\" started:" % model._bsl_cpp.name)
             # Loop to find the best positive class bonus
-            if model.bsl_cpp.pcumulative_conflict > 0:
+            if model._bsl_cpp.pcumulative_conflict > 0:
                 old_bonus = 0
                 max_reached = False
                 curr_step = bonus_step
                 # Increase/decrease the bonus while monitoring MCC
-                cicr_0 = model.bsl_cpp.pconflict_TP/model.bsl_cpp.pcumulative_conflict
+                cicr_0 = model._bsl_cpp.pconflict_TP/model._bsl_cpp.pcumulative_conflict
                 dist = cicr_0 - 0.5
                 while True:
                     if dist > 0:
-                        model.bsl_cpp.pclass_bonus = min(max_bonus, old_bonus+curr_step)
+                        model._bsl_cpp.pclass_bonus = min(max_bonus, old_bonus+curr_step)
                     else:
-                        model.bsl_cpp.pclass_bonus = max(-max_bonus, old_bonus-curr_step)
+                        model._bsl_cpp.pclass_bonus = max(-max_bonus, old_bonus-curr_step)
 
-                    if abs(model.bsl_cpp.pclass_bonus) == max_bonus:
+                    if abs(model._bsl_cpp.pclass_bonus) == max_bonus:
                         max_reached = True
 
                     predicted = self.predict(samples, True, true_labels)
                     new_mcc = matthews_corrcoef(true_labels, predicted)
                     # If our increment/decrement didn't provide improvements, roll it back
                     if new_mcc < old_mcc:
-                        model.bsl_cpp.pclass_bonus = old_bonus
+                        model._bsl_cpp.pclass_bonus = old_bonus
                         if over_stepping:
                             curr_step *= 2
                         else:
                             break
                     else:
-                        old_bonus = model.bsl_cpp.pclass_bonus
+                        old_bonus = model._bsl_cpp.pclass_bonus
                         old_mcc = new_mcc
 
                     # Needed the flag to be set earlier to prevent flapping between two bonus values in case new_mcc < old_mcc
@@ -285,37 +283,37 @@ class EBSL:
                         break
 
                 if _show_progress:
-                    print("Class 1 bonus = %g, CICR = %g, MCC = %g" % (model.bsl_cpp.pclass_bonus, cicr_0, old_mcc))
+                    print("Class 1 bonus = %g, CICR = %g, MCC = %g" % (model._bsl_cpp.pclass_bonus, cicr_0, old_mcc))
 
             # The same algorithm but for the negative class bonus
-            if model.bsl_cpp.ncumulative_conflict > 0:
+            if model._bsl_cpp.ncumulative_conflict > 0:
                 old_bonus = 0
                 max_reached = False
                 curr_step = bonus_step
                 # Increase/decrease the bonus while monitoring MCC
-                cicr_1 = model.bsl_cpp.nconflict_TN/model.bsl_cpp.ncumulative_conflict
+                cicr_1 = model._bsl_cpp.nconflict_TN/model._bsl_cpp.ncumulative_conflict
                 dist = cicr_1 - 0.5
                 while True:
                     if dist > 0:
-                        model.bsl_cpp.nclass_bonus = min(max_bonus, old_bonus+curr_step)
+                        model._bsl_cpp.nclass_bonus = min(max_bonus, old_bonus+curr_step)
                     else:
-                        model.bsl_cpp.nclass_bonus = max(-max_bonus, old_bonus-curr_step)
+                        model._bsl_cpp.nclass_bonus = max(-max_bonus, old_bonus-curr_step)
 
-                    if abs(model.bsl_cpp.nclass_bonus) == max_bonus:
+                    if abs(model._bsl_cpp.nclass_bonus) == max_bonus:
                         max_reached = True
 
-                    model.bsl_cpp.nclass_bonus = model.bsl_cpp.nclass_bonus
+                    model._bsl_cpp.nclass_bonus = model._bsl_cpp.nclass_bonus
                     predicted = self.predict(samples, True, true_labels)
                     new_mcc = matthews_corrcoef(true_labels, predicted)
                     # If our increment/decrement didn't provide improvements, roll it back
                     if new_mcc < old_mcc:
-                        model.bsl_cpp.nclass_bonus = old_bonus
+                        model._bsl_cpp.nclass_bonus = old_bonus
                         if over_stepping:
                             curr_step *= 2
                         else:
                             break
                     else:
-                        old_bonus = model.bsl_cpp.nclass_bonus
+                        old_bonus = model._bsl_cpp.nclass_bonus
                         old_mcc = new_mcc
 
                     # Needed the flag to be set earlier to prevent flapping between two bonus values in case new_mcc < old_mcc
@@ -325,8 +323,8 @@ class EBSL:
                 if _show_progress:
                     print("Class 0 bonus = %g, CICR = %g, MCC = %g" % (model.nclass_bonus, cicr_1, old_mcc))
 
-    def cpp_predict(self, out: NDArray[np.float32]):
-        return self.ebsl_cpp.predict_proba(out)
+    def _cpp_predict(self, out: NDArray[np.float32]):
+        return self._ebsl_cpp.predict_proba(out)
 
     def predict_proba(self, X, _keep_caches=False, _true_labels=None):
         """Predict using the ensemble of models added.
@@ -338,29 +336,29 @@ class EBSL:
 
         Returns
         -------
-        y : ndarray, shape (n_samples)
+        y : ndarray, shape (n_samples) containing the class 1 prediction probability
         """
 
         # Inform the C++ side that we have multi_flow information and send the id list over
         if self._id_col != "":
-            self.ebsl_cpp.multi_flow = True
-            self.ebsl_cpp.id_list = np.asarray(X[self._id_col], dtype=np.int64, order="C")
+            self._ebsl_cpp.multi_flow = True
+            self._ebsl_cpp.id_list = np.asarray(X[self._id_col], dtype=np.int64, order="C")
         else:
-            self.ebsl_cpp.multi_flow = False
-            self.ebsl_cpp.id_list = np.empty(1, dtype=np.int64, order="C")
+            self._ebsl_cpp.multi_flow = False
+            self._ebsl_cpp.id_list = np.empty(1, dtype=np.int64, order="C")
 
         # Generate the prediction cache (overwrites any older existing cache)
         if not _keep_caches:
             self._gen_prediction_cache(X)
         # Set the true labels variable to track CICR values
         if _true_labels is not None:
-            self.ebsl_cpp.true_labels = np.asarray(_true_labels, dtype=np.bool, order='C')
-            self.ebsl_cpp.compare_to_true_labels = True
+            self._ebsl_cpp.true_labels = np.asarray(_true_labels, dtype=np.bool, order='C')
+            self._ebsl_cpp.compare_to_true_labels = True
         else:
-            self.ebsl_cpp.compare_to_true_labels = False
+            self._ebsl_cpp.compare_to_true_labels = False
 
         results = np.empty(len(X), dtype=np.float32, order='C')
-        self.cpp_predict(results)
+        self._cpp_predict(results)
         return results
 
     def predict(self, X, _keep_caches=False, _true_labels=None):
@@ -373,29 +371,29 @@ class EBSL:
 
         Returns
         -------
-        y : ndarray, shape (n_samples)
+        y : ndarray, shape (n_samples) containing the predicted labels (0 or 1)
         """
         return self.predict_proba(X, _keep_caches, _true_labels).round()
 
     @property
     def slm_dist_to_avg(self):
-        return self.ebsl_cpp.slm_dist_to_avg
+        return self._ebsl_cpp.slm_dist_to_avg
 
     @property
     def slm_weights(self):
-        return self.ebsl_cpp.slm_weights
+        return self._ebsl_cpp.slm_weights
 
     @property
     def slm_uncertainty(self):
-        return self.ebsl_cpp.slm_uncertainty
+        return self._ebsl_cpp.slm_uncertainty
 
     @property
     def slm_penalties(self):
-        return self.ebsl_cpp.slm_penalties
+        return self._ebsl_cpp.slm_penalties
 
     @property
     def conflict_threshold(self):
-        return self.ebsl_cpp.conflict_threshold
+        return self._ebsl_cpp.conflict_threshold
 
     def _merge_caches(self):
         """Combines all predictions"""
