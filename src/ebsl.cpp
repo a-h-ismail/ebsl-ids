@@ -509,7 +509,7 @@ float EBSL::run_once()
     return class1_proba;
 }
 
-void EBSL::predict_proba()
+void EBSL::predict_proba(nb::ndarray<float, nb::numpy, nb::shape<-1>, nb::c_contig> out)
 {
     // Clear previous runs
     slm_dist_to_avg.clear();
@@ -530,7 +530,7 @@ void EBSL::predict_proba()
         slm_penalties.resize(nb_models);
     }
 
-    // Clear the state map
+    // Clear the states map
     states_map.clear();
 
     // Clear old conflict statistics
@@ -540,15 +540,10 @@ void EBSL::predict_proba()
         m->ncumulative_conflict = m->nconflict_TN = 0;
     }
 
-    int nb_rows = class1_prediction.shape(0);
-
-    float class1;
-    auto results = class1_prediction.data();
-    for (current_iteration = 0; current_iteration < nb_rows; ++current_iteration)
-    {
-        class1 = run_once();
-        results[current_iteration] = class1;
-    }
+    int nb_of_rows = out.shape(0);
+    auto results = out.data();
+    for (current_iteration = 0; current_iteration < nb_of_rows; ++current_iteration)
+        results[current_iteration] = run_once();
 }
 
 NB_MODULE(ebsl_cpp, m)
@@ -560,7 +555,7 @@ NB_MODULE(ebsl_cpp, m)
         .def("add_model", &EBSL::add_model, "model"_a)
         .def("remove_model", &EBSL::remove_model, "name"_a)
         .def("clear_all_models", &EBSL::clear_all_models)
-        .def("predict_proba", &EBSL::predict_proba)
+        .def("predict_proba", &EBSL::predict_proba, "predict_proba"_a)
         .def_rw("max_penalty", &EBSL::max_penalty)
         .def_rw("b", &EBSL::b)
         .def_rw("id_list", &EBSL::id_list)
@@ -572,7 +567,6 @@ NB_MODULE(ebsl_cpp, m)
         .def_rw("slm_weights", &EBSL::slm_weights)
         .def_rw("multi_flow", &EBSL::multi_flow)
         .def_rw("compare_to_true_labels", &EBSL::compare_to_true_labels)
-        .def_rw("class1_prediction", &EBSL::class1_prediction)
         .def_rw("enable_debugging", &EBSL::enable_debugging)
         .def_rw("conflict_threshold", &EBSL::conflict_threshold)
         .def_rw("base_rate_choice", &EBSL::base_rate_choice)

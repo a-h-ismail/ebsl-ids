@@ -82,7 +82,6 @@ public:
     int base_rate_choice;
     nb::ndarray<bool, nb::numpy, nb::shape<-1>, nb::c_contig> true_labels;
     nb::ndarray<int64_t, nb::numpy, nb::shape<-1>, nb::c_contig> id_list;
-    nb::ndarray<float, nb::numpy, nb::shape<-1>, nb::c_contig> class1_prediction;
     bool multi_flow;
     int current_iteration, iterations_count;
 
@@ -110,7 +109,7 @@ public:
 
     // Run the EBSL algorithm on already stored predictions
     // If true_labels is also provided, collects CICR statistics
-    void predict_proba();
+    void predict_proba(nb::ndarray<float, nb::numpy, nb::shape<-1>, nb::c_contig> out);
 };
 
 #endif

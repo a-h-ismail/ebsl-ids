@@ -6,6 +6,7 @@
 from typing import Literal
 from uuid import uuid4
 import numpy as np
+from numpy.typing import NDArray
 import pandas as pd
 from sklearn.metrics import matthews_corrcoef
 
@@ -324,8 +325,8 @@ class EBSL:
                 if _show_progress:
                     print("Class 0 bonus = %g, CICR = %g, MCC = %g" % (model.nclass_bonus, cicr_1, old_mcc))
 
-    def cpp_predict(self):
-        return self.ebsl_cpp.predict_proba()
+    def cpp_predict(self, out: NDArray[np.float32]):
+        return self.ebsl_cpp.predict_proba(out)
 
     def predict_proba(self, X, _keep_caches=False, _true_labels=None):
         """Predict using the ensemble of models added.
@@ -359,10 +360,8 @@ class EBSL:
             self.ebsl_cpp.compare_to_true_labels = False
 
         results = np.empty(len(X), dtype=np.float32, order='C')
-        self.ebsl_cpp.class1_prediction = results
-        self.cpp_predict()
-
-        return self.ebsl_cpp.class1_prediction
+        self.cpp_predict(results)
+        return results
 
     def predict(self, X, _keep_caches=False, _true_labels=None):
         """Predict using the ensemble of models added.
