@@ -39,14 +39,9 @@ void BSL_SM::set_bonuses(float class0_bonus, float class1_bonus)
     pclass_bonus = class1_bonus;
 }
 
-float BSL_SM::get_prediction(int index)
+void BSL_SM::get_information_opinion(int64_t current_index)
 {
-    return prediction_cache.data()[index];
-}
-
-void BSL_SM::get_information_opinion(int current_index)
-{
-    float p = get_prediction(current_index);
+    float p = prediction_cache.data()[current_index];
     information.b = p;
     information.d = 1 - p;
 }

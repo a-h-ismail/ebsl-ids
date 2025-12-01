@@ -57,6 +57,10 @@ std::string EBSL::to_string()
 
 void EBSL::add_model(BSL_SM *model)
 {
+    // The -1 avoids integer overflows in for loops
+    if (nb_models == INT_MAX - 1)
+        throw std::overflow_error("Maximum number of models reached!");
+
     try
     {
         slmodels_map.at(model->name);
@@ -540,7 +544,7 @@ void EBSL::predict_proba(nb::ndarray<float, nb::numpy, nb::shape<-1>, nb::c_cont
         m->ncumulative_conflict = m->nconflict_TN = 0;
     }
 
-    int nb_of_rows = out.shape(0);
+    int64_t nb_of_rows = out.shape(0);
     auto results = out.data();
     for (current_iteration = 0; current_iteration < nb_of_rows; ++current_iteration)
         results[current_iteration] = run_once();

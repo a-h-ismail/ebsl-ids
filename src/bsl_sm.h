@@ -30,9 +30,7 @@ class BSL_SM
 private:
     float conflict, conflict_counter;
 
-    float get_prediction(int index);
-
-    void get_information_opinion(int current_index);
+    void get_information_opinion(int64_t current_index);
 
     void get_discounted_information_opinion();
 
@@ -41,7 +39,7 @@ public:
     float trust_offset;
     Opinion trust, modified_trust;
     Opinion information, discounted_information;
-    int pcumulative_conflict, pconflict_TP, ncumulative_conflict, nconflict_TN;
+    int64_t pcumulative_conflict, pconflict_TP, ncumulative_conflict, nconflict_TN;
     float nclass_bonus, pclass_bonus, curr_bonus;
     std::string name;
 

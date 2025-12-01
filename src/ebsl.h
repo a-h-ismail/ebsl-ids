@@ -83,7 +83,7 @@ public:
     nb::ndarray<bool, nb::numpy, nb::shape<-1>, nb::c_contig> true_labels;
     nb::ndarray<int64_t, nb::numpy, nb::shape<-1>, nb::c_contig> id_list;
     bool multi_flow;
-    int current_iteration, iterations_count;
+    int64_t current_iteration, iterations_count;
 
     // For debugging and statistics collection
     std::vector<std::vector<float>> slm_dist_to_avg, slm_uncertainty, slm_penalties, slm_weights;
