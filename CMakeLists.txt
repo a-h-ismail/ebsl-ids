@@ -58,3 +58,4 @@ PYTHON_PATH $<TARGET_FILE_DIR:ebsl_cpp>
 DEPENDS ebsl_cpp)
 
 install(TARGETS ebsl_cpp LIBRARY DESTINATION ebsl)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/ebsl_cpp.pyi DESTINATION ebsl)
