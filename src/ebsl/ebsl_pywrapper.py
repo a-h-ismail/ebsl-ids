@@ -10,7 +10,7 @@ from numpy.typing import NDArray
 import pandas as pd
 from sklearn.metrics import matthews_corrcoef
 
-from ebsl_cpp import *
+from ebsl.ebsl_cpp import *
 
 
 class BSL_SM:
