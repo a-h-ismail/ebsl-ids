@@ -3,6 +3,7 @@
 # Copyright (C) 2025 Ahmad Ismail
 # SPDX-License-Identifier: MPL-2.0
 
+from array import array
 import numpy as np
 
 
@@ -17,7 +18,7 @@ class DModel:
 
     def set_sequence(self, probability_seq: list | tuple):
         "The probability sequence is that of class 1"
-        self.probability_seq = tuple(probability_seq)
+        self.probability_seq = array('f', probability_seq)
         self.max_index = len(probability_seq)
 
         for prob in probability_seq:
