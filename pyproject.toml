@@ -15,7 +15,7 @@ classifiers = [
     "License :: MPL-2",
 ]
 
-dependencies = [ "scikit-learn", "numpy", "pandas" ]
+dependencies = [ "scikit-learn >= 1.4.0", "numpy >= 2.0", "pandas" ]
 
 [project.urls]
 Homepage = "https://github.com/a-h-ismail/ebsl"
