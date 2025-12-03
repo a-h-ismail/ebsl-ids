@@ -10,7 +10,6 @@
 namespace nb = nanobind;
 using namespace nb::literals;
 
-// Resets the subjective logic state of this model
 void BSL_SM::reset_sl_state()
 {
     modified_trust = trust;
@@ -24,7 +23,7 @@ void BSL_SM::reset_sl_state()
 void BSL_SM::set_initial_trust_opinion(float b, float d, float u)
 {
     trust.set_parameters(b, d, u);
-    modified_trust.set_parameters(b, d, u);
+    modify_trust(trust, trust_offset, modified_trust);
 }
 
 void BSL_SM::trust_from_mcc(float mcc, int w)
