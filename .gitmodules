@@ -1,3 +1,6 @@
 [submodule "ext/nanobind"]
 	path = ext/nanobind
 	url = https://github.com/wjakob/nanobind
+[submodule "docs/theme"]
+	path = docs/theme
+	url = https://github.com/jothepro/doxygen-awesome-css.git
