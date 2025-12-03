@@ -573,8 +573,7 @@ NB_MODULE(ebsl_cpp, m)
         .def_rw("compare_to_true_labels", &EBSL::compare_to_true_labels)
         .def_rw("enable_debugging", &EBSL::enable_debugging)
         .def_rw("conflict_threshold", &EBSL::conflict_threshold)
-        .def_rw("base_rate_choice", &EBSL::base_rate_choice)
-        .def_rw("iteration", &EBSL::current_iteration);
+        .def_rw("base_rate_choice", &EBSL::base_rate_choice);
 
     nb::class_<BSL_SM>(m, "BSL_SM_cpp")
         .def(nb::init<>())
