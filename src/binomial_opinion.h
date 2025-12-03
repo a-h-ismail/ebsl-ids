@@ -1,6 +1,11 @@
 // Copyright (C) 2025 Ahmad Ismail
 // SPDX-License-Identifier: MPL-2.0
 
+/**
+ * @file
+ * @brief Defines the binomial opinion class and functions to operate on opinions
+ */
+
 #ifndef BINOMIAL_OPINION_H
 #define BINOMIAL_OPINION_H
 #include <vector>
@@ -9,7 +14,6 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
-// The binomial opinion class
 class Opinion
 {
 public:
