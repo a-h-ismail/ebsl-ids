@@ -29,3 +29,16 @@ build-dir = "build/{wheel_tag}"
 
 # Build stable ABI wheels for CPython 3.12+
 wheel.py-api = "cp312"
+
+[tool.cibuildwheel]
+# Necessary to see build output from the actual compilation
+build-verbosity = 1
+
+# Todo: Add some tests to run
+
+# Needed for some C++20 support on macOS
+[tool.cibuildwheel.macos.environment]
+MACOSX_DEPLOYMENT_TARGET = "13.3"
+
+skip = ["cp38-*", "pp38-*"] # Skip CPython and PyPy 3.8
+archs = ["auto64"]          # Only target 64 bit architectures
