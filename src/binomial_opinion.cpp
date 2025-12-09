@@ -104,7 +104,8 @@ Opinion average_fusion(std::vector<Opinion> &all_opinions)
     numerator = u_product;
     fused.u = numerator * count / denominator;
 
-    fused.d = 1 - fused.b - fused.u;
+    // The abs here handles rare cases where the rounding error gives a very small negative value, tripping the opinion validator
+    fused.d = abs(1 - fused.b - fused.u);
     // Should never fail but keep it just in case
     fused.validate_opinion();
 
