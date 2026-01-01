@@ -2,7 +2,7 @@
 
 The `ebsl` is a Python module implementing the Ensemble Binomial Subjective Logic framework, a binary ensemble classifier (based on subjective logic) that provides dynamic weighting.
 
-The C++ extension is documented here.
+The C++ extension is documented [here](https://a-h-ismail.gitlab.io/ebsl-ids-docs/).
 
 ## Installation
 
