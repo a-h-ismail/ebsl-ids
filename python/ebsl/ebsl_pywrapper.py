@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (C) 2025 Ahmad Ismail
+# Copyright (C) 2025-2026 Ahmad Ismail
 # SPDX-License-Identifier: MPL-2.0
 
 from typing import Literal
@@ -326,19 +326,7 @@ class EBSL:
     def _cpp_predict(self, out: NDArray[np.float32]):
         return self._ebsl_cpp.predict_proba(out)
 
-    def predict_proba(self, X, _keep_caches=False, _true_labels=None):
-        """Predict using the ensemble of models added.
-
-        Parameters
-        ----------
-        X : Dataframe of shape (n_samples, n_features)
-            The input data.
-
-        Returns
-        -------
-        y : ndarray, shape (n_samples) containing the class 1 prediction probability
-        """
-
+    def _prepare_predictor(self, X, _keep_caches, _true_labels):
         # Inform the C++ side that we have multi_flow information and send the id list over
         if self._id_col != "":
             self._ebsl_cpp.multi_flow = True
@@ -357,6 +345,19 @@ class EBSL:
         else:
             self._ebsl_cpp.compare_to_true_labels = False
 
+    def predict_proba(self, X, _keep_caches=False, _true_labels=None):
+        """Predict using the ensemble of models added.
+
+        Parameters
+        ----------
+        X : Dataframe of shape (n_samples, n_features)
+            The input data.
+
+        Returns
+        -------
+        y : ndarray, shape (n_samples) containing the class 1 prediction probability
+        """
+        self._prepare_predictor(X, _keep_caches, _true_labels)
         results = np.empty(len(X), dtype=np.float32, order='C')
         self._cpp_predict(results)
         return results
@@ -373,7 +374,10 @@ class EBSL:
         -------
         y : ndarray, shape (n_samples) containing the predicted labels (0 or 1)
         """
-        return self.predict_proba(X, _keep_caches, _true_labels).round()
+        self._prepare_predictor(X, _keep_caches, _true_labels)
+        results = np.empty(len(X), dtype=np.uint8, order='C')
+        self._ebsl_cpp.predict(results)
+        return results
 
     @property
     def slm_dist_to_avg(self):

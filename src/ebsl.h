@@ -1,4 +1,4 @@
-// Copyright (C) 2025 Ahmad Ismail
+// Copyright (C) 2025-2026 Ahmad Ismail
 // SPDX-License-Identifier: MPL-2.0
 
 /**
@@ -85,6 +85,8 @@ private:
     /// Executes one iteration of the EBSL algorithm. Does not modify the current_iteration counter
     float run_once();
 
+    void _prepare_predictor();
+
 public:
     /**
      * Contains pointers to all instances of BSL_SM objects.
@@ -150,6 +152,8 @@ public:
     /// Run the EBSL algorithm on already stored predictions
     /// @note If true_labels is also provided, collects CICR statistics
     void predict_proba(nb::ndarray<float, nb::numpy, nb::shape<-1>, nb::c_contig> out);
+
+    void predict(nb::ndarray<uint8_t, nb::numpy, nb::shape<-1>, nb::c_contig> out);
 };
 
 #endif

@@ -1,4 +1,4 @@
-// Copyright (C) 2025 Ahmad Ismail
+// Copyright (C) 2025-2026 Ahmad Ismail
 // SPDX-License-Identifier: MPL-2.0
 
 #include "binomial_opinion.h"
@@ -513,7 +513,7 @@ float EBSL::run_once()
     return class1_proba;
 }
 
-void EBSL::predict_proba(nb::ndarray<float, nb::numpy, nb::shape<-1>, nb::c_contig> out)
+void EBSL::_prepare_predictor()
 {
     // Clear previous runs
     slm_dist_to_avg.clear();
@@ -543,11 +543,30 @@ void EBSL::predict_proba(nb::ndarray<float, nb::numpy, nb::shape<-1>, nb::c_cont
         m->pcumulative_conflict = m->pconflict_TP = 0;
         m->ncumulative_conflict = m->nconflict_TN = 0;
     }
+}
 
+void EBSL::predict_proba(nb::ndarray<float, nb::numpy, nb::shape<-1>, nb::c_contig> out)
+{
+    _prepare_predictor();
     int64_t nb_of_rows = out.shape(0);
     auto results = out.data();
     for (current_iteration = 0; current_iteration < nb_of_rows; ++current_iteration)
         results[current_iteration] = run_once();
+}
+
+void EBSL::predict(nb::ndarray<uint8_t, nb::numpy, nb::shape<-1>, nb::c_contig> out)
+{
+    _prepare_predictor();
+    int64_t nb_of_rows = out.shape(0);
+    float proba;
+    auto results = out.data();
+    for (current_iteration = 0; current_iteration < nb_of_rows; ++current_iteration)
+    {
+        proba = run_once();
+        // Floating point hacks for fast rounding to 0 or 1 (not a general rounding)
+        // Mask the exponent and check that it is 126 or larger
+        results[current_iteration] = (*((int32_t *)&proba) & 0x7F800000) >= 0x3F000000;
+    }
 }
 
 NB_MODULE(ebsl_cpp, m)
@@ -559,7 +578,8 @@ NB_MODULE(ebsl_cpp, m)
         .def("add_model", &EBSL::add_model, "model"_a)
         .def("remove_model", &EBSL::remove_model, "name"_a)
         .def("clear_all_models", &EBSL::clear_all_models)
-        .def("predict_proba", &EBSL::predict_proba, "predict_proba"_a)
+        .def("predict_proba", &EBSL::predict_proba, "class1_predictions"_a)
+        .def("predict", &EBSL::predict, "predicted_labels"_a)
         .def_rw("max_penalty", &EBSL::max_penalty)
         .def_rw("b", &EBSL::b)
         .def_rw("id_list", &EBSL::id_list)
