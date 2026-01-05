@@ -563,9 +563,9 @@ void EBSL::predict(nb::ndarray<uint8_t, nb::numpy, nb::shape<-1>, nb::c_contig> 
     for (current_iteration = 0; current_iteration < nb_of_rows; ++current_iteration)
     {
         proba = run_once();
-        // Floating point hacks for fast rounding to 0 or 1 (not a general rounding)
-        // Mask the exponent and check that it is 126 or larger
-        results[current_iteration] = (*((int32_t *)&proba) & 0x7F800000) >= 0x3F000000;
+        // Fast rounding to 0 or 1 (not a general rounding)
+        // Mask the exponent and check that it is 126 or larger (which implies 0.5 or larger)
+        results[current_iteration] = (std::bit_cast<uint32_t>(proba) & 0x7F800000) >= 0x3F000000;
     }
 }
 
