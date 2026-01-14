@@ -16,23 +16,21 @@ from ebsl.ebsl_cpp import *
 class BSL_SM:
     "BSL_SM: Binomial Subjective Logic - Single Model"
 
-    def __init__(self, model, scaler, trust_opinion=None, name="") -> None:
+    def __init__(self, model, trust_opinion=None, name="") -> None:
         """
         Creates the building blocks required for Ensemble Binomial Subjective Logic.
-        It encapsulates an ML model, its scaler and manages subjective logic opinions (information, trust)
+        It encapsulates a ML model and manages subjective logic opinions (information, trust)
 
         Parameters
         ----------
-        model: Any binary model providing methods predict() and predict_proba() like sklearn
-
-        scaler: Should provide the transform() method like sklearn
+        model: Any binary model providing methods predict() and predict_proba() like sklearn. If you have a preprocessing step,
+        add it to a pipeline with the classifier and send the pipeline as argument instead.
 
         trust_opinion: Indicates the trustworthiness of a model. Affects the contribution of each model to the final prediction.
 
         name: The model name. If none is provided, a random one is generated
         """
         self.model = model
-        self.scaler = scaler
 
         if name == "":
             name = str(uuid4()).replace('-', '')[:16]
@@ -105,7 +103,7 @@ class BSL_SM:
         self._bsl_cpp.set_initial_trust_opinion(b, d, u)
 
     def trust_from_mcc(self, mcc: float, w=2):
-        """Sets the trust opinion of this model using its Matthews correlation coefficient (MCC)"""
+        """Sets the trust opinion of this model using its Matthews Correlation Coefficient (MCC)"""
         self._bsl_cpp.trust_from_mcc(mcc, w)
 
     def set_bonuses(self, nclass_bonus: float, pclass_bonus: float):
@@ -113,12 +111,8 @@ class BSL_SM:
 
     def predict_proba_to_cache(self, samples):
         """
-        Calls predict_proba of the underlying model after scaling the input samples
+        Calls predict_proba of the underlying model or pipeline
         """
-        if self.scaler is not None:
-            samples = samples[self.scaler.get_feature_names_out()]
-            samples = self.scaler.transform(samples)
-
         self.prediction_cache = np.asarray(self.model.predict_proba(samples)[:, 1], dtype=np.float32, order='C')
 
 
@@ -192,6 +186,8 @@ class EBSL:
 
     def _gen_prediction_cache(self, samples: pd.DataFrame):
         """Fills the prediction cache of all models for the current samples"""
+        if self._id_col != "":
+            samples = samples.drop(self._id_col, axis=1)
         for model in self._slmodels:
             model.predict_proba_to_cache(samples)
 
