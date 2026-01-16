@@ -319,8 +319,8 @@ class EBSL:
                 if _show_progress:
                     print("Class 0 bonus = %g, CICR = %g, MCC = %g" % (model.nclass_bonus, cicr_1, old_mcc))
 
-    def _cpp_predict(self, out: NDArray[np.float32]):
-        return self._ebsl_cpp.predict_proba(out)
+    def _cpp_predict_proba(self, out: NDArray[np.float32]) -> None:
+        self._ebsl_cpp.predict_proba(out)
 
     def _prepare_predictor(self, X, _keep_caches, _true_labels):
         # Inform the C++ side that we have multi_flow information and send the id list over
@@ -355,7 +355,7 @@ class EBSL:
         """
         self._prepare_predictor(X, _keep_caches, _true_labels)
         results = np.empty(len(X), dtype=np.float32, order='C')
-        self._cpp_predict(results)
+        self._cpp_predict_proba(results)
         return results
 
     def predict(self, X, _keep_caches=False, _true_labels=None):
