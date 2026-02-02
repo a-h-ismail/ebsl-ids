@@ -1,9 +1,9 @@
 // Copyright (C) 2025-2026 Ahmad Ismail
 // SPDX-License-Identifier: MPL-2.0
 
+#include "ebsl.h"
 #include "binomial_opinion.h"
 #include "bsl_sm.h"
-#include "ebsl.h"
 #include <format>
 
 void EBSL::update_discounted_info_vector()
@@ -51,12 +51,15 @@ std::string EBSL::to_string()
     default:
         throw std::runtime_error(std::format("Unrecognized operation mode \"{}\"", base_rate_choice));
     }
-    return std::format("EBSL classifier: conflict_threshold={:g}, max_penalty={:g}, b={:g}, trust_restore_speed={:g}, base_rate_choice:\"{}\", nb_of_classifiers = {}",
+    return std::format("EBSL classifier: conflict_threshold={:g}, max_penalty={:g}, b={:g}, trust_restore_speed={:g}, "
+                       "base_rate_choice:\"{}\", nb_of_classifiers = {}",
                        conflict_threshold, max_penalty, b, trust_restore_speed, base_rate_choice_str, (int)nb_models);
 }
 
 void EBSL::add_model(BSL_SM *model)
 {
+    std::unique_lock<std::mutex> locker(lock);
+
     // The -1 avoids integer overflows in for loops
     if (nb_models == INT_MAX - 1)
         throw std::overflow_error("Maximum number of models reached!");
@@ -81,9 +84,12 @@ void EBSL::add_model(BSL_SM *model)
 
 void EBSL::remove_model(std::string name)
 {
+    std::unique_lock<std::mutex> locker(lock);
+
     try
     {
-        auto model = slmodels_map.at(name);
+        // This will raise an exception if the name doesn't exists
+        slmodels_map.at(name);
         // The name exists, remove it from the dict and find where it is in the
         slmodels_map.erase(name);
         for (int i = 0; i < nb_models; ++i)
@@ -107,6 +113,7 @@ void EBSL::remove_model(std::string name)
 
 void EBSL::clear_all_models()
 {
+    std::unique_lock<std::mutex> locker(lock);
     slmodels.clear();
     slmodels_map.clear();
     states_map.clear();
@@ -389,8 +396,8 @@ void EBSL::reevaluate_trust()
 
         puts("\n");
         for (BSL_SM *m : slmodels)
-            printf("Model %s: Conflict count = %g, curr_penalty = %.3g, bonus = %.3g\n",
-                   m->name.c_str(), m->conflict_counter, get_penalty(m->conflict_counter), m->curr_bonus);
+            printf("Model %s: Conflict count = %g, curr_penalty = %.3g, bonus = %.3g\n", m->name.c_str(),
+                   m->conflict_counter, get_penalty(m->conflict_counter), m->curr_bonus);
 
         puts("\n* After trust update");
         puts("Discounted information opinions:");
@@ -487,9 +494,9 @@ float EBSL::run_once()
     if (enable_debugging)
     {
         puts("--------------------------------------------");
-        printf("Iteration %d\n", current_iteration);
+        printf("Iteration %" PRId64 "\n", current_iteration);
         if (multi_flow)
-            printf("Flow ID: %lli \n", id_list.data()[current_iteration]);
+            printf("Flow ID: %" PRId64 " \n", id_list.data()[current_iteration]);
     }
 
     // Load the correct SL state for the current flow
@@ -547,6 +554,9 @@ void EBSL::_prepare_predictor()
 
 void EBSL::predict_proba(nb::ndarray<float, nb::numpy, nb::shape<-1>, nb::c_contig> out)
 {
+    // Avoid potential concurrency problems
+    std::unique_lock<std::mutex> locker(lock);
+
     _prepare_predictor();
     int64_t nb_of_rows = out.shape(0);
     auto results = out.data();
@@ -556,6 +566,8 @@ void EBSL::predict_proba(nb::ndarray<float, nb::numpy, nb::shape<-1>, nb::c_cont
 
 void EBSL::predict(nb::ndarray<uint8_t, nb::numpy, nb::shape<-1>, nb::c_contig> out)
 {
+    std::unique_lock<std::mutex> locker(lock);
+
     _prepare_predictor();
     int64_t nb_of_rows = out.shape(0);
     float proba;
@@ -573,7 +585,8 @@ NB_MODULE(ebsl_cpp, m)
 {
     nb::class_<EBSL>(m, "EBSL_cpp")
         .def(nb::init<>())
-        .def(nb::init<float, float, float, float, int>(), "conflict_threshold"_a = 0.15, "max_penalty"_a = 0.5, "b"_a = 1., "trust_restore_speed"_a = 0.5, "base_rate_choice"_a = (int)PRIOR_SOURCE)
+        .def(nb::init<float, float, float, float, int>(), "conflict_threshold"_a = 0.15, "max_penalty"_a = 0.5, "b"_a = 1.,
+             "trust_restore_speed"_a = 0.5, "base_rate_choice"_a = (int)PRIOR_SOURCE)
         .def("__str__", &EBSL::to_string)
         .def("add_model", &EBSL::add_model, "model"_a)
         .def("remove_model", &EBSL::remove_model, "name"_a)

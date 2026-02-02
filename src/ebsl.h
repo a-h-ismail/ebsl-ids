@@ -11,13 +11,12 @@
 
 #include "binomial_opinion.h"
 #include "bsl_sm.h"
-#include <unordered_map>
-#include <stdexcept>
+#include <mutex>
 #include <nanobind/ndarray.h>
-#include <nanobind/stl/vector.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/unordered_map.h>
-#include <cstdio>
+#include <nanobind/stl/vector.h>
+#include <unordered_map>
 
 enum base_rate_sourcing_mode
 {
@@ -51,9 +50,13 @@ private:
     int models_in_conflict;
     int64_t current_iteration;
     int64_t iterations_count;
+    std::mutex lock;
 
     /// Initializes base weights, which is the weight of every model when no trust modification is occuring. Helps speed up the case of zero trust offset.
     void init_base_weights();
+
+    /// Clears the subjective logic state of the EBSL and BSL_SM instances
+    void clear_sl_state();
 
     /// Sets base_rate (a) to all original information opinions
     void set_all_base_rates(float base_rate);
@@ -115,6 +118,9 @@ public:
     /// When enabled, the EBSL collects CICR related statistics for each model (pcumulative_conflict ,pconflict_TP, ...)
     bool compare_to_true_labels;
 
+    /// Enable/disable multi-flow support
+    bool multi_flow;
+
     /// Base rate sourcing mode, see enum "base_rate_sourcing_mode"
     int base_rate_choice;
 
@@ -124,16 +130,10 @@ public:
     /// List of flow IDs, for multi-flow tracking
     nb::ndarray<int64_t, nb::numpy, nb::shape<-1>, nb::c_contig> id_list;
 
-    /// Enable/disable multi-flow support
-    bool multi_flow;
-
     /// For debugging and statistics collection
     std::vector<std::vector<float>> slm_dist_to_avg, slm_uncertainty, slm_penalties, slm_weights;
 
     EBSL(float conflict_threshold = 0.15, float max_penalty = 0.5, float b = 1., float trust_restore_speed = 0.5, int base_rate_choice = PRIOR_SOURCE);
-
-    /// Clears the subjective logic state of the EBSL and BSL_SM instances
-    void clear_sl_state();
 
     std::string to_string();
 
