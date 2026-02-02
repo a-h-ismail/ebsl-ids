@@ -9,9 +9,8 @@
 #ifndef BSL_SM_H
 #define BSL_SM_H
 #include "binomial_opinion.h"
-#include <vector>
-#include <string>
 #include <nanobind/ndarray.h>
+#include <string>
 
 namespace nb = nanobind;
 
