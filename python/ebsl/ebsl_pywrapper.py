@@ -3,15 +3,21 @@
 # Copyright (C) 2025-2026 Ahmad Ismail
 # SPDX-License-Identifier: MPL-2.0
 
+from math import sqrt
 from typing import Literal
 from uuid import uuid4
 import numpy as np
 from numpy.typing import NDArray
 import pandas as pd
-from sklearn.metrics import matthews_corrcoef
-
 from ebsl.ebsl_cpp import *
 
+
+def matthews_corrcoef(y_true, y_pred):
+    TP = np.sum((y_true == 1) & (y_pred == 1))
+    TN = np.sum((y_true == 0) & (y_pred == 0))
+    FP = np.sum((y_true == 0) & (y_pred == 1))
+    FN = np.sum((y_true == 1) & (y_pred == 0))
+    return (TP * TN - FP * FN) / (sqrt(TP + FP) * sqrt(TP + FN) * sqrt(TN + FP) * sqrt(TN + FN))
 
 class BSL_SM:
     "BSL_SM: Binomial Subjective Logic - Single Model"
@@ -111,7 +117,8 @@ class BSL_SM:
 
     def predict_proba_to_cache(self, samples):
         """
-        Calls predict_proba of the underlying model or pipeline
+        Calls predict_proba of the underlying model or pipeline.
+        Works with any ML model exposing a function that behaves exactly like scikit learn predict_proba().
         """
         self.prediction_cache = np.asarray(self.model.predict_proba(samples)[:, 1], dtype=np.float32, order='C')
 
