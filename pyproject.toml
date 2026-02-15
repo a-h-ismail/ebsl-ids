@@ -11,11 +11,8 @@ requires-python = ">=3.12"
 authors = [
     { name = "Ahmad Ismail", email = "a.h.ismail.dev@gmail.com" },
 ]
-classifiers = [
-    "License :: MPL-2",
-]
-
-dependencies = [ "scikit-learn >= 1.4.0", "numpy >= 2.0", "pandas" ]
+license = "MPL-2.0"
+dependencies = [ "numpy >= 2.0", "pandas" ]
 
 [project.urls]
 Homepage = "https://github.com/a-h-ismail/ebsl"
