@@ -34,11 +34,9 @@ else()
 endif()
 
 # Try to import all Python components potentially needed by nanobind
-find_package(Python 3.8
+find_package(Python 3.9
   REQUIRED COMPONENTS Interpreter Development.Module
   OPTIONAL_COMPONENTS Development.SABIModule)
-
-find_package(Python 3.8 COMPONENTS Interpreter ${DEV_MODULE} REQUIRED)
 
 if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
@@ -48,7 +46,7 @@ endif()
 # Detect the installed nanobind package and import it into CMake
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/ext/nanobind)
 
-nanobind_add_module(ebsl_cpp src/ebsl.cpp src/binomial_opinion.cpp src/bsl_sm.cpp)
+nanobind_add_module(ebsl_cpp STABLE_ABI src/ebsl.cpp src/binomial_opinion.cpp src/bsl_sm.cpp)
 
 nanobind_add_stub(
 ebsl_cpp_stub
