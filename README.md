@@ -4,6 +4,8 @@ The `ebsl` is a Python module implementing the Ensemble Binomial Subjective Logi
 
 The C++ extension is documented [here](https://a-h-ismail.gitlab.io/ebsl-ids-docs/).
 
+Results of the testing scenario in a vehicular networks are in a [separate repository](https://github.com/a-h-ismail/ebsl-ids-example).
+
 ## Proof of Concepts
 
 Some basic proof of concepts related to Binomial opinions and the EBSL classifier exist in the `PoC` directory.
