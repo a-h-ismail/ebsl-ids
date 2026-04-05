@@ -270,7 +270,9 @@ class EBSL:
                     else:
                         model._bsl_cpp.pclass_bonus = max(-max_bonus, old_bonus-curr_step)
 
-                    if abs(model._bsl_cpp.pclass_bonus) == max_bonus:
+                    # Check if the currrent bonus is equal to the max bonus
+                    # Using "difference close to zero" instead of equality to handle minor floating point inaccuracies
+                    if abs(abs(model._bsl_cpp.pclass_bonus) - max_bonus) < 1e-7:
                         max_reached = True
 
                     predicted = self.predict(samples, True, true_labels)
@@ -307,7 +309,7 @@ class EBSL:
                     else:
                         model._bsl_cpp.nclass_bonus = max(-max_bonus, old_bonus-curr_step)
 
-                    if abs(model._bsl_cpp.nclass_bonus) == max_bonus:
+                    if abs(abs(model._bsl_cpp.nclass_bonus) - max_bonus) < 1e-7:
                         max_reached = True
 
                     model._bsl_cpp.nclass_bonus = model._bsl_cpp.nclass_bonus
