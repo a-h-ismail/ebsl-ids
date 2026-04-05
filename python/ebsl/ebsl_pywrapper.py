@@ -191,6 +191,9 @@ class EBSL:
         self._slmodels.clear()
         self._slmodels_dict.clear()
 
+    def clear_bonuses(self):
+        self._ebsl_cpp.clear_bonuses()
+
     def _gen_prediction_cache(self, samples: pd.DataFrame):
         """Fills the prediction cache of all models for the current samples"""
         if self._id_col != "":
@@ -207,7 +210,7 @@ class EBSL:
             mcc = matthews_corrcoef(true_labels, np.round(model.prediction_cache))
             model.trust_from_mcc(mcc)
 
-    def auto_tune(self, samples, true_labels, bonus_step=0.2, descending_order=True, over_stepping=False, _show_progress=False):
+    def auto_tune(self, samples, true_labels, bonus_step=0.2, max_bonus=-1.0, descending_order=True, over_stepping=False, _show_progress=False):
         """
         Finds good trust bonuses for the given dataset. Sets models trust opinion from their MCC.
 
@@ -245,7 +248,9 @@ class EBSL:
         if _show_progress:
             print("Baseline MCC (no bonuses): %g" % old_mcc)
 
-        max_bonus = self._ebsl_cpp.max_penalty
+        # Default case: max bonus should not exceed m (the maximum penalty)
+        if max_bonus < 0:
+            max_bonus = self._ebsl_cpp.max_penalty
 
         # Traversing models in descending order
         for model in self._slmodels:
