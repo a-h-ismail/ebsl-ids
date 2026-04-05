@@ -146,6 +146,9 @@ public:
     /// Clears all BSL_SM models from the classifier
     void clear_all_models();
 
+    /// Clears the positive and negative class bonuses for all BSL_SM instances
+    void clear_bonuses();
+
     /// Returns the penalty corresponding to the provided nb_conflict counter
     float get_penalty(float nb_conflict);
 

@@ -37,6 +37,14 @@ void EBSL::clear_sl_state()
     models_in_conflict = 0;
 }
 
+void EBSL::clear_bonuses()
+{
+    // Avoid potential concurrency problems
+    std::unique_lock<std::mutex> locker(lock);
+    for (BSL_SM *m : slmodels)
+        m->set_bonuses(0, 0);
+}
+
 std::string EBSL::to_string()
 {
     const char *base_rate_choice_str;
@@ -324,7 +332,7 @@ void EBSL::reevaluate_trust()
     for (BSL_SM *slmodel : slmodels)
     {
         float distance_to_average_conf;
-        distance_to_average_conf = slmodel->conflict - average_conflict;
+        distance_to_average_conf = abs(slmodel->conflict - average_conflict);
 
         if (distance_to_average_conf > conflict_threshold)
         {
@@ -410,7 +418,7 @@ void EBSL::reevaluate_trust()
         // Store dist to average conflict, penalties and uncertainty
         for (int i = 0; i < nb_models; ++i)
         {
-            slm_dist_to_avg[i].push_back(slmodels[i]->conflict - average_conflict);
+            slm_dist_to_avg[i].push_back(abs(slmodels[i]->conflict - average_conflict));
             slm_penalties[i].push_back(slmodels[i]->trust_offset);
             slm_uncertainty[i].push_back(slmodels[i]->discounted_information.u);
         }
@@ -593,6 +601,7 @@ NB_MODULE(ebsl_cpp, m)
         .def("clear_all_models", &EBSL::clear_all_models)
         .def("predict_proba", &EBSL::predict_proba, "class1_predictions"_a)
         .def("predict", &EBSL::predict, "predicted_labels"_a)
+        .def("clear_bonuses", &EBSL::clear_bonuses)
         .def_rw("max_penalty", &EBSL::max_penalty)
         .def_rw("b", &EBSL::b)
         .def_rw("id_list", &EBSL::id_list)
