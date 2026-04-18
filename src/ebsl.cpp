@@ -12,13 +12,13 @@ void EBSL::update_discounted_info_vector()
         all_discounted_opinions[i] = slmodels[i]->discounted_information;
 }
 
-EBSL::EBSL(float conflict_threshold, float max_penalty, float b, float trust_restore_speed, int base_rate_choice)
+EBSL::EBSL(float conflict_threshold, float m, float r, float trust_restore_speed, int base_rate_choice)
 {
     enable_debugging = false;
     multi_flow = false;
     EBSL::conflict_threshold = conflict_threshold;
-    EBSL::max_penalty = max_penalty;
-    EBSL::b = b;
+    EBSL::m = m;
+    EBSL::r = r;
     EBSL::trust_restore_speed = trust_restore_speed;
     EBSL::base_rate_choice = base_rate_choice;
     last_prediction = 0;
@@ -59,9 +59,9 @@ std::string EBSL::to_string()
     default:
         throw std::runtime_error(std::format("Unrecognized operation mode \"{}\"", base_rate_choice));
     }
-    return std::format("EBSL classifier: conflict_threshold={:g}, max_penalty={:g}, b={:g}, trust_restore_speed={:g}, "
+    return std::format("EBSL classifier: conflict_threshold={:g}, m={:g}, r={:g}, trust_restore_speed={:g}, "
                        "base_rate_choice:\"{}\", nb_of_classifiers = {}",
-                       conflict_threshold, max_penalty, b, trust_restore_speed, base_rate_choice_str, (int)nb_models);
+                       conflict_threshold, m, r, trust_restore_speed, base_rate_choice_str, (int)nb_models);
 }
 
 void EBSL::add_model(BSL_SM *model)
@@ -247,7 +247,7 @@ void EBSL::load_state(int64_t flow_id)
 
 float EBSL::get_penalty(float nb_conflict)
 {
-    return max_penalty * nb_conflict / (nb_conflict + b);
+    return m * nb_conflict / (nb_conflict + r);
 }
 
 void EBSL::get_all_information_opinions()
@@ -602,8 +602,8 @@ NB_MODULE(ebsl_cpp, m)
         .def("predict_proba", &EBSL::predict_proba, "class1_predictions"_a)
         .def("predict", &EBSL::predict, "predicted_labels"_a)
         .def("clear_bonuses", &EBSL::clear_bonuses)
-        .def_rw("max_penalty", &EBSL::max_penalty)
-        .def_rw("b", &EBSL::b)
+        .def_rw("m", &EBSL::m)
+        .def_rw("r", &EBSL::r)
         .def_rw("id_list", &EBSL::id_list)
         .def_rw("true_labels", &EBSL::true_labels)
         .def_rw("slmodels_dict", &EBSL::slmodels_map)
@@ -623,7 +623,7 @@ NB_MODULE(ebsl_cpp, m)
         .def("set_bonuses", &BSL_SM::set_bonuses, "class_0"_a, "class_1"_a)
         .def("set_initial_trust_opinion", &BSL_SM::set_initial_trust_opinion, "b"_a, "d"_a, "u"_a)
         .def_rw("prediction_cache", &BSL_SM::prediction_cache)
-        .def_rw("trust", &BSL_SM::trust)
+        .def_ro("trust", &BSL_SM::trust)
         .def_rw("modified_trust", &BSL_SM::modified_trust)
         .def_rw("pclass_bonus", &BSL_SM::pclass_bonus)
         .def_rw("nclass_bonus", &BSL_SM::nclass_bonus)
