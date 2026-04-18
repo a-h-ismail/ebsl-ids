@@ -133,7 +133,7 @@ public:
     /// For debugging and statistics collection
     std::vector<std::vector<float>> slm_dist_to_avg, slm_uncertainty, slm_penalties, slm_weights;
 
-    EBSL(float conflict_threshold = 0.15, float max_penalty = 0.5, float b = 5., float trust_restore_speed = 0.5,
+    EBSL(float conflict_threshold = 0.15, float m = 0.5, float r = 5, float trust_restore_speed = 0.5,
          int base_rate_choice = PRIOR_SOURCE);
 
     std::string to_string();

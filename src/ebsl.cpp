@@ -593,7 +593,7 @@ NB_MODULE(ebsl_cpp, m)
 {
     nb::class_<EBSL>(m, "EBSL_cpp")
         .def(nb::init<>())
-        .def(nb::init<float, float, float, float, int>(), "conflict_threshold"_a = 0.15, "max_penalty"_a = 0.5, "b"_a = 1.,
+        .def(nb::init<float, float, float, float, int>(), "conflict_threshold"_a = 0.15, "m"_a = 0.5, "r"_a = 1.,
              "trust_restore_speed"_a = 0.5, "base_rate_choice"_a = (int)PRIOR_SOURCE)
         .def("__str__", &EBSL::to_string)
         .def("add_model", &EBSL::add_model, "model"_a)
