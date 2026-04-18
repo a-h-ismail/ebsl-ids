@@ -13,6 +13,7 @@ from ebsl.ebsl_cpp import *
 
 
 def matthews_corrcoef(y_true, y_pred):
+    # I know the function exists in sklearn, but why pull the entire thing for one function :)
     TP = np.sum((y_true == 1) & (y_pred == 1))
     TN = np.sum((y_true == 0) & (y_pred == 0))
     FP = np.sum((y_true == 0) & (y_pred == 1))
@@ -25,23 +26,21 @@ class BSL_SM:
     def __init__(self, model, trust_opinion=None, name="") -> None:
         """
         Creates the building blocks required for Ensemble Binomial Subjective Logic.
-        It encapsulates a ML model and manages subjective logic opinions (information, trust)
+        It encapsulates a ML model and manages the subjective logic state (information, trust, conflict...)
 
         Parameters
         ----------
-        model: Any binary model providing methods predict() and predict_proba() like sklearn. If you have a preprocessing step,
-        add it to a pipeline with the classifier and send the pipeline as argument instead.
-
-        trust_opinion: Indicates the trustworthiness of a model. Affects the contribution of each model to the final prediction.
-
-        name: The model name. If none is provided, a random one is generated
+        - model: Any binary classification model providing methods predict() and predict_proba() like sklearn. If you have a preprocessing step, add it to a pipeline with the classifier and send the pipeline as argument instead.
+        - trust_opinion: Indicates the initial trustworthiness of a model. Affects the contribution of each model to the final prediction.
+        - name: The model name. If none is provided, a random one is generated
         """
         self.model = model
 
+        # If no name is provided, get a UUID instead
         if name == "":
             name = str(uuid4()).replace('-', '')[:16]
 
-        # The C++ core implementation
+        # Allocate an instance of the C++ implementation of BSL_SM
         self._bsl_cpp = BSL_SM_cpp()
         if trust_opinion is not None:
             self._bsl_cpp.trust = trust_opinion
@@ -52,10 +51,6 @@ class BSL_SM:
     @property
     def trust(self):
         return self._bsl_cpp.trust
-
-    @trust.setter
-    def trust(self, value):
-        self._bsl_cpp.trust = value
 
     @property
     def prediction_cache(self):
@@ -112,8 +107,8 @@ class BSL_SM:
         """Sets the trust opinion of this model using its Matthews Correlation Coefficient (MCC)"""
         self._bsl_cpp.trust_from_mcc(mcc, w)
 
-    def set_bonuses(self, nclass_bonus: float, pclass_bonus: float):
-        self._bsl_cpp.set_bonuses(nclass_bonus, pclass_bonus)
+    def set_bonuses(self, class_0: float, class_1: float):
+        self._bsl_cpp.set_bonuses(class_0, class_1)
 
     def predict_proba_to_cache(self, samples):
         """
@@ -126,26 +121,19 @@ class BSL_SM:
 class EBSL:
     "EBSL: Ensemble Binomial Subjective Logic"
 
-    def __init__(self, conflict_threshold=0.15, max_penalty=0.5, b=5., trust_restore_speed=0.5, base_rate_choice: Literal["prior", "trust"] = "prior", id_col: str = "", _debug=False) -> None:
+    def __init__(self, conflict_threshold=0.15, m=0.5, r=5., trust_restore_speed=0.5, base_rate_choice: Literal["prior", "trust"] = "prior", id_col: str = "", _debug=False) -> None:
         """
-        Collection of BSL_SM models. Enables prediction aggregation using subjective logic
+        Collection of BSL_SM models. Enables prediction aggregation using subjective logic.
 
         Parameters
         ----------
-        conflict_threshold: The minimum value a model's conflict should have above the average conflict to reduce its trust
-
-        max_penalty: The maximun penalty added to the model's trust opinion (disbelief)
-
-        b: Inverse of speed of losing trust
-
-        trust_restore_speed: Indicates trust restoration step size on lack of conflict (mistrust step size is 1)
-
-        base_rate_choice: How to choose the base rate. "prior" uses the last aggregated prediction probability.
-        "trust" uses the probability produced by the currently most trusted model
-
-        id_col: Name of the column containing the flow identifier. Necessary to track trust for each flow separately
-
-        _debug: Enables debugging output
+        - conflict_threshold: The minimum value a model's conflict should have above the average conflict to reduce its trust
+        - m: The maximun penalty applied to the model's trust opinion (disbelief)
+        - r: Inversely proportional to the rate of increase of the penalty as a function of the conflict counter.
+        - trust_restore_speed: Indicates trust restoration step size on lack of conflict (on conflict, the conflict counter is incremented).
+        - base_rate_choice: How to obtain the base rate, supports "prior" (last prediction) and "trust" (best model in iteration) modes.
+        - id_col: Name of the column containing the flow identifier. Necessary to track trust for each flow separately
+        - _debug: Enables debugging output
         """
         self.base_rate_choice: str
         self._slmodels: list[BSL_SM] = []
@@ -156,7 +144,7 @@ class EBSL:
 
         self.base_rate_choice = base_rate_choice
         self._id_col = id_col
-        self._ebsl_cpp = EBSL_cpp(conflict_threshold, max_penalty, b, trust_restore_speed, base_rate_choice_val)
+        self._ebsl_cpp = EBSL_cpp(conflict_threshold, m, r, trust_restore_speed, base_rate_choice_val)
         self._ebsl_cpp.enable_debugging = _debug
         self._slmodels_dict = {}
 
@@ -216,19 +204,16 @@ class EBSL:
 
         Parameters
         ----------
-        samples: Dataset sample points
-
-        true_labels: The true labels corresponding to samples, should be binary.
-
-        bonus_step: Determines the step size while modifying bonuses.
-
-        descending_order: When set to True, models are processed in the order of decreasing MCC
-
-        over_stepping: If True, the function keeps trying with higher bonus steps, may provide better bonuses with longer runtime.
+        - samples: Dataset sample points
+        - true_labels: The true labels corresponding to samples, should be binary.
+        - bonus_step: Determines the step size while modifying bonuses.
+        - max_bonus: The maximum allowed absolute value of bonuses.
+        - descending_order: When set to True, models are processed in the order of decreasing MCC
+        - over_stepping: If True, the function keeps trying with higher bonus steps, may provide better bonuses with longer runtime.
 
         Note
         ----
-        The absolute value of bonuses is capped by the maximum penalty.
+        The absolute value of bonuses is capped by the maximum penalty if max_bonus is not set.
         """
         if bonus_step < 0.05:
             raise ValueError("Bonus value %g is too small, it should be greater than 0.05")
@@ -250,13 +235,13 @@ class EBSL:
 
         # Default case: max bonus should not exceed m (the maximum penalty)
         if max_bonus < 0:
-            max_bonus = self._ebsl_cpp.max_penalty
+            max_bonus = self._ebsl_cpp.m
 
         # Traversing models in descending order
         for model in self._slmodels:
             if _show_progress:
                 print("Tuning bonuses of model \"%s\" started:" % model._bsl_cpp.name)
-            # Loop to find the best positive class bonus
+            # Loop to find the best positive class (class 1) bonus
             if model._bsl_cpp.pcumulative_conflict > 0:
                 old_bonus = 0
                 max_reached = False
@@ -295,7 +280,7 @@ class EBSL:
                 if _show_progress:
                     print("Class 1 bonus = %g, CICR = %g, MCC = %g" % (model._bsl_cpp.pclass_bonus, cicr_0, old_mcc))
 
-            # The same algorithm but for the negative class bonus
+            # The same algorithm but for the negative class (class 0) bonus
             if model._bsl_cpp.ncumulative_conflict > 0:
                 old_bonus = 0
                 max_reached = False
@@ -337,18 +322,19 @@ class EBSL:
         self._ebsl_cpp.predict_proba(out)
 
     def _prepare_predictor(self, X, _keep_caches, _true_labels):
-        # Inform the C++ side that we have multi_flow information and send the id list over
         if self._id_col != "":
+            # Inform the C++ side that we have multi_flow information and send the id list over
             self._ebsl_cpp.multi_flow = True
             self._ebsl_cpp.id_list = np.asarray(X[self._id_col], dtype=np.int64, order="C")
         else:
             self._ebsl_cpp.multi_flow = False
+            # Set a very small array to overwrite any old references so they can be garbage collected
             self._ebsl_cpp.id_list = np.empty(1, dtype=np.int64, order="C")
 
         # Generate the prediction cache (overwrites any older existing cache)
         if not _keep_caches:
             self._gen_prediction_cache(X)
-        # Set the true labels variable to track CICR values
+        # Set the true labels variable if it exists to track CICR values
         if _true_labels is not None:
             self._ebsl_cpp.true_labels = np.asarray(_true_labels, dtype=np.bool, order='C')
             self._ebsl_cpp.compare_to_true_labels = True
@@ -365,7 +351,7 @@ class EBSL:
 
         Returns
         -------
-        y : ndarray, shape (n_samples) containing the class 1 prediction probability
+        y : ndarray, shape (n_samples) containing the class 1 prediction probabilities
         """
         self._prepare_predictor(X, _keep_caches, _true_labels)
         results = np.empty(len(X), dtype=np.float32, order='C')
