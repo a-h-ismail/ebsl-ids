@@ -43,7 +43,10 @@ class BSL_SM:
         # Allocate an instance of the C++ implementation of BSL_SM
         self._bsl_cpp = BSL_SM_cpp()
         if trust_opinion is not None:
-            self._bsl_cpp.trust = trust_opinion
+            if isinstance(trust_opinion, Opinion):
+                self._bsl_cpp.set_initial_trust_opinion(trust_opinion.b, trust_opinion.d, trust_opinion.u)
+            else:
+                raise RuntimeError("Expected an Opinion object in the trust_opinion parameter")
 
         self.name = name
 
@@ -100,7 +103,7 @@ class BSL_SM:
     def name(self, value):
         self._bsl_cpp.name = value
 
-    def set_initial_trust_opinion(self, b, d, u):
+    def set_initial_trust_opinion(self, b: float, d: float, u: float) -> None:
         self._bsl_cpp.set_initial_trust_opinion(b, d, u)
 
     def trust_from_mcc(self, mcc: float, w=2):
