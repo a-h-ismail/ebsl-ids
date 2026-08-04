@@ -25,7 +25,7 @@ m3 = dm.DModel((0.2, 0.1, 0.11, 0.14, 0.1, 0.22, 0.26, 0.4, 0.37, 0.5))
 
 # Create a new ensemble classifier and set the models
 eclassifier = sl.EBSL(_debug=True, base_rate_choice="prior", trust_restore_speed=0.5,
-                      conflict_threshold=0.15, max_penalty=0.5, b=5)
+                      conflict_threshold=0.15, m=0.5, r=5)
 
 eclassifier.add_model(sl.BSL_SM(m1, None, "1"))
 eclassifier.add_model(sl.BSL_SM(m2, None, "2"))
